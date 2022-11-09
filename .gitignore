@@ -104,3 +104,6 @@ ENV/
 
 # IDE settings
 .vscode/
+
+# local settings
+setup-env.sh
