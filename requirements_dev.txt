@@ -11,4 +11,5 @@ pre-commit==2.8.2
 Click==7.0
 pytest
 pytest-runner
-
+netCDF4
+dask

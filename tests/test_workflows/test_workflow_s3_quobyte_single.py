@@ -16,10 +16,13 @@ pytestmark = pytest.mark.skipif(
 access_keys = "token", "secret", "endpoint"
 access_dict = {}
 ad = access_dict
-bucket_id = "kct-test-s3-quobyte-1"
+
+bucket_id = "kct-test-s3-quobyte-2"
+single_index_json = "single_index.json"
+multi_index_json = "multi_index.json"
+
 nc_urls = []
 mc = None
-index_url = None
 
 
 print("""!!!NOTE!!! he async interactions between
@@ -57,7 +60,7 @@ def file_in_bucket(fname, bucket_id, recursive=False):
 
 def test_s3_quobyte_upload_data_files():
     # Create bucket
-#    mc.make_bucket(bucket_id)
+    mc.make_bucket(bucket_id)
          
     # Check bucket made
     assert bucket_id in [bucket.name for bucket in mc.list_buckets()], f"Failed to create bucket: {bucket_id}"
@@ -71,7 +74,7 @@ def test_s3_quobyte_upload_data_files():
         size = os.path.getsize(fpath)
 
         # Put object in the bucket
-#        mc.fput_object(bucket_id, fname, fpath)
+        mc.fput_object(bucket_id, fname, fpath)
 
         # Assert file uploaded to S3
         assert file_in_bucket(fname, bucket_id)
@@ -81,19 +84,22 @@ def test_s3_quobyte_single_index():
     data_file = nc_urls[0]
     indexer = kct.Indexer(ad["token"], ad["secret"], ad["endpoint"])
 
-    global index_url
-    index_url = indexer.create(data_file, bucket_id)
+    index_url = indexer.create(data_file, bucket_id, output_path=single_index_json)
     index_path = urlparse(index_url).path.split("/", 1)[1]
 
     assert file_in_bucket(index_path, bucket_id, recursive=True), f"Failed to index file at: {index_url}"
 
 
-def partial_test_s3_quobyte_single_read_data(use_access_control=False):
-    _access_dict = access_dict if use_access_control else None
+def partial_test_s3_quobyte_single_read_data(single=True):
+    index_json = single_index_json if single else multi_index_json
+    index_url = f"s3://{bucket_id}/{index_json}"
 
-    dataset = "s3://kct-test-s3-quobyte-single/kerchunk-jsons/hus_Amon_HadGEM3-GC31-MM_1pctCO2_r1i1p1f3_gn_185001-186912.json"
-    index_url = f"s3://{bucket_id}/kerchunk-jsons/hus_Amon_HadGEM3-GC31-MM_1pctCO2_r1i1p1f3_gn_185001-186912.json"
-    ds = kct.wrap_xr_open(index_url, access_dict=_access_dict)
+    ds = kct.wrap_xr_open(index_url, access_dict=access_dict)
+    return ds
+
+
+def test_s3_quobyte_single_read_data_secured():
+    ds = partial_test_s3_quobyte_single_read_data(single=True)
 
     subset = ds.sel(time=slice("1855-01-01", "1856-01-01"), lat=slice(20, 40), lon=slice(20, 40))
     print("subset shape", subset.hus.shape)
@@ -105,36 +111,48 @@ def partial_test_s3_quobyte_single_read_data(use_access_control=False):
     assert np.isclose(mx, 0.0190827)
 
 
-def test_s3_quobyte_single_read_data_secured():
-    partial_test_s3_quobyte_single_read_data(use_access_control=True)
-
-
 @pytest.mark.xfail(reason="Data is currently restricted by access control.")
 def test_s3_quobyte_single_read_data_open():
     partial_test_s3_quobyte_single_read_data()
 
 
-"""
 def test_s3_quobyte_multiple_index():
-    pass
+    data_files = nc_urls
+    indexer = kct.Indexer(ad["token"], ad["secret"], ad["endpoint"])
+
+    index_url = indexer.create(data_files, bucket_id, output_path=multi_index_json)
+    index_path = urlparse(index_url).path.split("/", 1)[1]
+
+    assert file_in_bucket(index_path, bucket_id, recursive=True), f"Failed to index file at: {index_url}"
 
 
 def test_s3_quobyte_multiple_read_data():
-    pass
+    ds = partial_test_s3_quobyte_single_read_data(single=False)
+    subset = ds.sel(time=slice("1850-01-01", "1909-01-01"), lat=slice(0, 1), lon=slice(20, 21), plev=1000)
+    print("subset shape", subset.hus.shape)
+    assert subset.hus.shape == (708, 2, 1)
+
+    mx = float(subset.hus.max())
+    print(f"MAX: {mx}")
+
+    assert np.isclose(mx, 0.00000406)
+
+
+def test_posix_multiple_read_data():
+    import xarray as xr
+    ds = xr.open_mfdataset(TEST_DATA_POSIX, combine="by_coords", use_cftime=True) #, combine="by_coords")
+    subset = ds.sel(time=slice("1850-01-01", "1909-01-01"), lat=slice(0, 1), lon=slice(20, 21), plev=1000)
+
+    print("subset shape", subset.hus.shape)
+    assert subset.hus.shape == (708, 2, 1)
+
+    mx = float(subset.hus.max())
+    print(f"MAX: {mx}")
+
+    assert np.isclose(mx, 0.00000406)
 
 
 def teardown_module():
     print("We would delete everything again here.")
 
-"""
-
-# def run_all():
-#     setup_module()
-#     #test_s3_quobyte_upload_data_files()
-#     #test_s3_quobyte_single_index()
-#     test_s3_quobyte_single_read_data_secured()
-#     # test_s3_quobyte_single_read_data_open()
-#     # test_s3_quobyte_multiple_index()
-#     # test_s3_quobyte_multiple_read_data()
-#     # teardown_module()
 

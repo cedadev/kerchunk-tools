@@ -44,14 +44,12 @@ def wrap_xr_open(dataset, access_dict=None):
     ref = s3fs.S3FileSystem(**fssopts).open(dataset)
 
     show_env_vars()
-
- #   fsspec = importlib.reload(fsspec)
-
     #fsspec.config.conf.setdefault('s3', {}).setdefault('client_kwargs', {})['endpoint'] = access_dict["endpoint"]
     mapper = fsspec.get_mapper('reference://', fo=ref, target_protocol="http", **fssopts)
     show_env_vars()
 
-    ds = xr.open_zarr(mapper) #, **fssopts) #, backend_kwargs={'consolidated': False})
+    ds = xr.open_zarr(mapper) 
+        #, **fssopts) #, backend_kwargs={'consolidated': False})
 
     for key in ("AWS_ACCESS_KEY_ID", "FSSPEC_CONFIG_DIR"): print(f"{key} -> {os.environ[key]}")
 
