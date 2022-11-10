@@ -1,7 +1,8 @@
 import os
 import json
-import kerchunk.hdf
 import fsspec
+import kerchunk.hdf
+
 from urllib.parse import urlparse
 
 

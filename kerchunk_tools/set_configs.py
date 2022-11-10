@@ -1,6 +1,6 @@
 import os
 import tempfile
-import importlib
+
 
 fsspec_config_dir = os.path.join(os.environ["HOME"], ".fsspec-tmp-configs")
 fsspec_config_fname = "fsspec.json"
