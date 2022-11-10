@@ -1,2 +1,11 @@
-Click>=7.0
+click
 minio
+fsspec
+kerchunk
+numpy
+xarray
+h5py
+requests
+aiohttp
+s3fs
+cftime
