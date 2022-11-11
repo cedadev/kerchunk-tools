@@ -17,7 +17,7 @@ access_keys = "token", "secret", "endpoint"
 access_dict = {}
 ad = access_dict
 
-bucket_id = "kct-test-s3-quobyte"
+bucket_id = "kct-test-s3-quobyte-3"
 single_index_json = "single_index.json"
 multi_index_json = "multi_index.json"
 
