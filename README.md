@@ -30,7 +30,7 @@ NOTE: I COULD NOT RUN UNIT TESTS WITH `pytest` BECAUSE THE ENV VARS WERE LOST IN
 
 
 ```
-S3_TOKEN=s3_token S3_SECRET=s3_secret S3_ENDPOINT=s3_endpoint pytest tests/test_workflows/test_workflow_s3_quobyte_single.py -v
+OVERWRITE_FSSPEC_CONFIG=1 S3_TOKEN=s3_token S3_SECRET=s3_secret S3_ENDPOINT=s3_endpoint pytest tests/test_workflows/test_workflow_s3_quobyte_single.py -v
 ```
 
 Actually, it is possible to overcome this by NOT using env vars, but ensuring this file exists:
@@ -52,3 +52,5 @@ The above overcomes the problem - and doesn't lose track of the environment.
 
 
 AND MAYBE WE CAN SIMPLIFY THE OTHER AUTH STUFF !!!
+
+SO: you need to set this env var to allow the app to overwrite the fsspec config file: OVERWRITE_FSSPEC_CONFIG=1

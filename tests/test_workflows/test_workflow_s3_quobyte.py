@@ -17,7 +17,7 @@ access_keys = "token", "secret", "endpoint"
 access_dict = {}
 ad = access_dict
 
-bucket_id = "kct-test-s3-quobyte-2"
+bucket_id = "kct-test-s3-quobyte"
 single_index_json = "single_index.json"
 multi_index_json = "multi_index.json"
 
@@ -154,5 +154,3 @@ def test_posix_multiple_read_data():
 
 def teardown_module():
     print("We would delete everything again here.")
-
-

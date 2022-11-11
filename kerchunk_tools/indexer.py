@@ -21,15 +21,6 @@ class Indexer:
 
     def update_max_bytes(self, max_bytes):
         self.max_bytes = max_bytes if max_bytes > 0 else self.MAX_INDEXED_ARRAY_SIZE_IN_BYTES
-              
-
-    # def _get_output_url(self, bucket_id, url, remove_suffixes=0):
-    #     json_base = urlparse(url).path.split("/")[-1][:-3]
-    #     for i in range(remove_suffixes):
-    #         json_base = "_".join(json_base.split("_")[:-1])
-        
-    #     json_base += ".json"
-    #     return f"s3://{bucket_id}/kerchunk-jsons/{json_name}"
 
     def _get_output_url(self, bucket_id, output_path):
         return f"s3://{bucket_id}/{output_path}"

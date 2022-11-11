@@ -2,16 +2,19 @@ import os
 import tempfile
 
 
-fsspec_config_dir = os.path.join(os.environ["HOME"], ".fsspec-tmp-configs")
+#fsspec_config_dir = os.path.join(os.environ["HOME"], ".fsspec-tmp-configs")
+fsspec_config_dir = os.path.join(os.environ["HOME"], ".config/fsspec")
 fsspec_config_fname = "fsspec.json"
 
 
 def setup_configs(key, secret, url, purge=True):
-    if purge: purge_old_configs()
+#    if purge: purge_old_configs()
     if not os.path.isdir(fsspec_config_dir):
-        os.mkdir(fsspec_config_dir)
-    tmpdir = tempfile.mkdtemp(dir=os.path.join(fsspec_config_dir))
-#    aws_file = os.path.join(tmpdir, "aws.conf")
+        os.makedirs(fsspec_config_dir)
+
+    dr = fsspec_config_dir
+#    dr = tempfile.mkdtemp(dir=os.path.join(fsspec_config_dir))
+#    aws_file = os.path.join(dr, "aws.conf")
 
 #    with open(aws_file, "w") as aws:
 #        aws.write(f"""[default]
@@ -19,7 +22,10 @@ def setup_configs(key, secret, url, purge=True):
 #aws_secret_access_key = {secret}
 #""")
 
-    fsspec_file = os.path.join(tmpdir, fsspec_config_fname)
+    fsspec_file = os.path.join(dr, fsspec_config_fname)
+    if os.path.isfile(fsspec_file) and not os.environ.get("OVERWRITE_FSSPEC_CONFIG"):
+        raise Exception(f"CONFIG FILE ALREADY EXISTS: {fsspec_file} - stopping to avoid overwriting!")
+
     with open(fsspec_file, "w") as fss:
         fss.write(f"""{{
     "s3": {{
@@ -31,12 +37,14 @@ def setup_configs(key, secret, url, purge=True):
 """)
  
 #    os.environ["AWS_CONFIG_FILE"] = aws_file
-    os.environ["FSSPEC_CONFIG_DIR"] = tmpdir
+    # !!!Because of an asyncio call (I think) - the FSSPEC_CONFIG_DIR environment variable does not persist in the stack
+    # !!!You can overcome this by writing the file to the expected location: ~/.config/fsspec/conf.json
+#    os.environ["FSSPEC_CONFIG_DIR"] = tmpdir
     os.environ["AWS_ACCESS_KEY_ID"] = key
     os.environ["AWS_SECRET_ACCESS_KEY"] = secret
 
 # AWS_CONFIG_FILE=/home/users/astephens/xarray-zarr-deep-dive/tmpconf/aws.conf FSSPEC_CONFIG_DIR=/home/users/astephens/xarray-zarr-deep-dive/tmpconf
-    return tmpdir
+    return dr
 
 
 def purge_old_configs():
