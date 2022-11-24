@@ -5,6 +5,9 @@ import xarray as xr
 import fsspec
 import s3fs
 
+
+DEBUG = True
+
 try:
     from set_configs import setup_configs
 except:
@@ -12,24 +15,36 @@ except:
 
 
 def show_env_vars():
+    if not DEBUG: return
     for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "FSSPEC_CONFIG_DIR"): 
         print(f"{key} -> {os.environ.get(key, 'UNDEFINED')}")
 
 
-def wrap_xr_open(dataset, access_dict=None):
-    if access_dict: 
-        # construct the input options for fsspec
-        fssopts = {
-                "key": access_dict["token"],
-                "secret": access_dict["secret"],
-                "client_kwargs": {"endpoint_url": access_dict["endpoint"]}
-        }
+def wrap_xr_open(file_uri, s3_config=None):
+    if not s3_config:
+        return _open_as_posix(file_uri)
+    else:
+        return _open_as_s3(file_uri, s3_config)
+
+
+def _open_as_posix(file_uri):
+    mapper = fsspec.get_mapper("reference://", fo=file_uri)
+    return xr.open_zarr(mapper) 
+
+
+def _open_as_s3(file_uri, s3_config):
+    # construct the input options for fsspec
+    fssopts = {
+                "key": s3_config["token"],
+                "secret": s3_config["secret"],
+                "client_kwargs": {"endpoint_url": s3_config["endpoint_url"]}
+    }
 
     print(fssopts)
-    fsspec_config_dir = setup_configs(access_dict["token"], access_dict["secret"], access_dict["endpoint"])
+    fsspec_config_dir = setup_configs(fssopts["key"], fssopts["secret"], s3_config["endpoint_url"])
 
     print("HAVE TO SET CONFIG BEFORE IMPORTING xarray??????")
-    ref = s3fs.S3FileSystem(**fssopts).open(dataset)
+    ref = s3fs.S3FileSystem(**fssopts).open(file_uri)
 
     show_env_vars()
     #fsspec.config.conf.setdefault('s3', {}).setdefault('client_kwargs', {})['endpoint'] = access_dict["endpoint"]
@@ -37,8 +52,6 @@ def wrap_xr_open(dataset, access_dict=None):
     show_env_vars()
 
     ds = xr.open_zarr(mapper) #, storage_options=fssopts) 
-        #, **fssopts) #, backend_kwargs={'consolidated': False})
-
     show_env_vars()
     return ds
 

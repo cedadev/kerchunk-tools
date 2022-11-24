@@ -13,15 +13,14 @@ pytestmark = pytest.mark.skipif(
     not os.path.isdir(BASE_DIR), 
     reason=f"Data dir {BASE_DIR} not mounted.")
 
-access_keys = "token", "secret", "endpoint"
-access_dict = {}
-ad = access_dict
+access_keys = "token", "secret", "endpoint_url"
+s3_config = {}
 
-bucket_id = "kct-test-s3-quobyte-3"
+bucket_id = "kct-test-s3-quobyte-6"
 single_index_json = "single_index.json"
 multi_index_json = "multi_index.json"
 
-nc_urls = []
+file_uris = []
 mc = None
 
 
@@ -30,12 +29,12 @@ print("""!!!NOTE!!! he async interactions between
       The solution is to ensure that this file exists: ~/.config/fsspec/conf.json
       
 ```
-S3_TOKEN=token S3_SECRET=secret S3_ENDPOINT=endpoint pytest -v tests/test_workflows/test_workflow_s3_quobyte_single.py
+S3_TOKEN=token S3_SECRET=secret S3_ENDPOINT_URL=endpoint pytest -v tests/test_workflows/test_workflow_s3_quobyte_single.py
 ```
       """)
 
 def setup_module():
-    if len(access_dict) == len(access_keys):
+    if len(s3_config) == len(access_keys):
         # All good
         return
 
@@ -46,12 +45,12 @@ def setup_module():
         if not value:
             raise Exception(f"Please provide environment variable: '{key}' to run tests.")
 
-        access_dict[key] = value
+        s3_config[key] = value
 
     global mc
 
-    endpoint_no_protocol = access_dict["endpoint"].split(":")[-1][2:]
-    mc = Minio(endpoint_no_protocol, access_dict["token"], access_dict["secret"], secure=False)
+    endpoint_no_protocol = s3_config["endpoint_url"].split(":")[-1][2:]
+    mc = Minio(endpoint_no_protocol, s3_config["token"], s3_config["secret"], secure=False)
 
 
 def file_in_bucket(fname, bucket_id, recursive=False):
@@ -60,7 +59,8 @@ def file_in_bucket(fname, bucket_id, recursive=False):
 
 def test_s3_quobyte_upload_data_files():
     # Create bucket
-    mc.make_bucket(bucket_id)
+    if not bucket_id in mc.list_buckets():
+        mc.make_bucket(bucket_id)
          
     # Check bucket made
     assert bucket_id in [bucket.name for bucket in mc.list_buckets()], f"Failed to create bucket: {bucket_id}"
@@ -70,31 +70,32 @@ def test_s3_quobyte_upload_data_files():
         fname = os.path.basename(fpath)
         bucket_path = f"{bucket_id}/{fname}" 
 
-        nc_urls.append(f"s3://{bucket_path}")
+        file_uris.append(f"s3://{bucket_path}")
         size = os.path.getsize(fpath)
 
         # Put object in the bucket
-        mc.fput_object(bucket_id, fname, fpath)
+        if not file_in_bucket(fname, bucket_id):
+            mc.fput_object(bucket_id, fname, fpath)
 
         # Assert file uploaded to S3
         assert file_in_bucket(fname, bucket_id)
 
 
 def test_s3_quobyte_single_index():
-    data_file = nc_urls[0]
-    indexer = kct.Indexer(ad["token"], ad["secret"], ad["endpoint"])
+    data_file = file_uris[0]
+    indexer = kct.Indexer(s3_config=s3_config)
 
-    index_url = indexer.create(data_file, bucket_id, output_path=single_index_json)
-    index_path = urlparse(index_url).path.split("/", 1)[1]
+    index_uri = indexer.create(data_file, bucket_id, output_path=single_index_json)
+    index_path = urlparse(index_uri).path.split("/", 1)[1]
 
-    assert file_in_bucket(index_path, bucket_id, recursive=True), f"Failed to index file at: {index_url}"
+    assert file_in_bucket(index_path, bucket_id, recursive=True), f"Failed to index file at: {index_uri}"
 
 
 def partial_test_s3_quobyte_single_read_data(single=True):
     index_json = single_index_json if single else multi_index_json
-    index_url = f"s3://{bucket_id}/{index_json}"
+    index_uri = f"s3://{bucket_id}/{index_json}"
 
-    ds = kct.wrap_xr_open(index_url, access_dict=access_dict)
+    ds = kct.wrap_xr_open(index_uri, s3_config=s3_config)
     return ds
 
 
@@ -117,13 +118,12 @@ def test_s3_quobyte_single_read_data_open():
 
 
 def test_s3_quobyte_multiple_index():
-    data_files = nc_urls
-    indexer = kct.Indexer(ad["token"], ad["secret"], ad["endpoint"])
+    indexer = kct.Indexer(s3_config=s3_config)
 
-    index_url = indexer.create(data_files, bucket_id, output_path=multi_index_json)
-    index_path = urlparse(index_url).path.split("/", 1)[1]
+    index_uri = indexer.create(file_uris, bucket_id, output_path=multi_index_json)
+    index_path = urlparse(index_uri).path.split("/", 1)[1]
 
-    assert file_in_bucket(index_path, bucket_id, recursive=True), f"Failed to index file at: {index_url}"
+    assert file_in_bucket(index_path, bucket_id, recursive=True), f"Failed to index file at: {index_uri}"
 
 
 def test_s3_quobyte_multiple_read_data():
