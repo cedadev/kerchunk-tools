@@ -4,7 +4,7 @@ import tempfile
 
 #fsspec_config_dir = os.path.join(os.environ["HOME"], ".fsspec-tmp-configs")
 fsspec_config_dir = os.path.join(os.environ["HOME"], ".config/fsspec")
-fsspec_config_fname = "fsspec.json"
+fsspec_config_fname = "conf.json"
 
 
 def setup_configs(key, secret, url, purge=True):

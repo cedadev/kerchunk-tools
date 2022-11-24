@@ -36,7 +36,7 @@ def wrap_xr_open(dataset, access_dict=None):
     mapper = fsspec.get_mapper('reference://', fo=ref, target_protocol="http", **fssopts)
     show_env_vars()
 
-    ds = xr.open_zarr(mapper) 
+    ds = xr.open_zarr(mapper) #, storage_options=fssopts) 
         #, **fssopts) #, backend_kwargs={'consolidated': False})
 
     show_env_vars()
