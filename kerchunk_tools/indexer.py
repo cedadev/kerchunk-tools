@@ -11,52 +11,81 @@ class Indexer:
 
     MAX_INDEXED_ARRAY_SIZE_IN_BYTES = 10000
 
-    def __init__(self, access_token, access_secret, endpoint_url, max_bytes=-1):
-        self.access_token, self.access_secret = access_token, access_secret
-        self.endpoint_url = endpoint_url
+    def __init__(self, s3_config=None, max_bytes=-1):
+        if s3_config:
+            self.scheme = "s3"
+            self.uri_prefix = "s3://"
+            self.fssopts = {
+                "key": s3_config["token"],
+                "secret": s3_config["secret"],
+                "client_kwargs": {"endpoint_url": s3_config["endpoint_url"]}
+            }
 
-        self.fssopts = {"key": self.access_token, "secret": self.access_secret, 
-                        "client_kwargs": {"endpoint_url": self.endpoint_url}}
+        else:
+            self.scheme = "posix"
+            self.uri_prefix = ""
+
         self.update_max_bytes(max_bytes)
 
     def update_max_bytes(self, max_bytes):
         self.max_bytes = max_bytes if max_bytes > 0 else self.MAX_INDEXED_ARRAY_SIZE_IN_BYTES
 
-    def _get_output_url(self, bucket_id, output_path):
-        return f"s3://{bucket_id}/{output_path}"
+    def _get_output_uri(self, prefix, output_path):
+        return f"{self.uri_prefix}{prefix}/{output_path}"
 
-    def create(self, file_urls, bucket_id, output_path="index.json", max_bytes=-1, xarray_args=None):
-        max_bytes = max_bytes if max_bytes > 0 else self.max_bytes
-        file_urls = [file_urls] if isinstance(file_urls, str) else file_urls
+    def _kc_read_single_posix(self, file_uri):
+        return kerchunk.hdf.SingleHdf5ToZarr(file_uri).translate()
+
+    def _kc_read_single_s3(self, file_uri):
+        with fsspec.open(file_uri, "rb", **self.fssopts) as input_fss:
+            # generate kerchunk and write to buffer
+            return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
+
+    def _build_multizarr(self, singles):
+        kwargs = {}
+
+        if self.scheme == "s3":
+            kwargs["remote_protocol"] = "s3"
+            kwargs["remote_options"] = self.fssopts
+      
+        mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
+        return mzz.translate() 
+
+    def create(self, file_uris, prefix, output_path="index.json", max_bytes=-1, xarray_args=None):
+        self.update_max_bytes(max_bytes)
+        file_uris = [file_uris] if isinstance(file_uris, str) else file_uris
 
         # Loop through data files collecting their metadata
-        singles = []
+        single_indexes = []
 
-        for url in file_urls:
-            print(f"Reading: {url}")
+        for file_uri in file_uris:
+            print(f"Reading: {file_uri}")
 
-            with fsspec.open(url, "rb", **self.fssopts) as input_fss:
-                # generate kerchunk and write to buffer
-                h5chunks = kerchunk.hdf.SingleHdf5ToZarr(input_fss, url, inline_threshold=max_bytes)
-                singles.append(h5chunks.translate())
+            if self.scheme == "s3":
+                reader = self._kc_read_single_s3
+            else:
+                reader = self._kc_read_single_posix
 
-        url_out = self._get_output_url(bucket_id, output_path)
+            single_indexes.append(reader(file_uri))
+
+        # Define output file uri
+        output_uri = self._get_output_uri(prefix, output_path)
 
         # Write JSON for single file or merge and write for multiple files
-        if len(file_urls) == 1:
-            json_content = singles[0]
+        if len(file_uris) == 1:
+            json_content = single_indexes[0]
         else:
-            mzz = MultiZarrToZarr(
-                singles,
-                remote_protocol="s3",
-                remote_options=self.fssopts,
-                concat_dims=["time"]
-            )
+            json_content = self._build_multizarr(single_indexes)
 
-            json_content = mzz.translate()
+        json_to_write = json.dumps(json_content).encode()
 
-        with fsspec.open(url_out, "wb", **self.fssopts) as output_fss:
-            output_fss.write(json.dumps(json_content).encode())
+        if self.scheme == "s3":
+            with fsspec.open(output_uri, "wb", **self.fssopts) as kc_file:
+                kc_file.write(json_to_write)
+        else:
+            with open(output_uri, "wb") as kc_file:
+                kc_file.write(json_to_write)
 
-        print(f"Written file: {url_out}")
-        return url_out
+        print(f"Written file: {output_uri}")
+        return output_uri
+
