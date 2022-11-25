@@ -14,7 +14,7 @@ except:
     from .set_configs import setup_configs
 
 
-def show_env_vars():
+def _show_env_vars():
     if not DEBUG: return
     for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "FSSPEC_CONFIG_DIR"): 
         print(f"{key} -> {os.environ.get(key, 'UNDEFINED')}")
@@ -46,12 +46,11 @@ def _open_as_s3(file_uri, s3_config):
     print("HAVE TO SET CONFIG BEFORE IMPORTING xarray??????")
     ref = s3fs.S3FileSystem(**fssopts).open(file_uri)
 
-    show_env_vars()
-    #fsspec.config.conf.setdefault('s3', {}).setdefault('client_kwargs', {})['endpoint'] = access_dict["endpoint"]
+    _show_env_vars()
     mapper = fsspec.get_mapper('reference://', fo=ref, target_protocol="http", **fssopts)
-    show_env_vars()
+    _show_env_vars()
 
-    ds = xr.open_zarr(mapper) #, storage_options=fssopts) 
-    show_env_vars()
+    ds = xr.open_zarr(mapper)
+    _show_env_vars()
     return ds
 

@@ -18,17 +18,7 @@ The tools included here allow:
 
 ## Installation
 
-### Installing with Pip
-
-Assuming you have Python 3 installed:
-
-```
-python -m venv venv
-source venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-### Installing with miniconda
+### Method 1: Install with miniconda
 
 From scratch, you can conda install with:
 
@@ -40,6 +30,51 @@ source ~/miniconda/bin/activate
 conda create --name kerchunk-tools --file spec-file.txt
 
 conda activate kerchunk-tools
+pip install -e . --no-deps
+```
+
+### Method 2: Install with Pip
+
+Assuming you have Python 3 installed, you can also install with Pip:
+
+```
+python -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install -e . --no-deps 
+```
+
+NOTE: this installation method generated a lot of HDF5 library warnings 
+      when reading data, which were not seen with the Conda install.
+
+## Basic usage
+
+Here is an example of using `kerchunk_tools` with authentication to the 
+S3 service:
+
+```
+# NOTE: OVERWRITE_FSSPEC_CONFIG is set to avoid a warning that it might
+#       overwrite a file in your home directory.
+#       Insert your credentials into the `s3_config` dictionary.
+
+$ OVERWRITE_FSSPEC_CONFIG=1 python
+
+import kerchunk_tools as kct
+
+s3_config = {
+    "token": "TOKEN",
+    "secret": "SECRET",
+    "endpoint_url": "ENDPOINT_URL"
+}
+
+index_uri = "s3://kc-indexes/ESACCI-OC-L3S-CHLOR_A-MERGED-1M_MONTHLY_4km_GEO_PML_OCx-fv5.0.json"
+ds = kct.wrap_xr_open(index_uri, s3_config=s3_config)
+
+print(ds)
+chlor_a = ds.chlor_a
+
+print(ds.shape, ds.dims)
 ```
 
 ## Testing
@@ -85,8 +120,12 @@ $ cat ~/.config/fsspec/conf.json
 
 The above overcomes the problem - and doesn't lose track of the environment.
 
-SO: you need to set this env var to allow the app to overwrite the fsspec config file: OVERWRITE_FSSPEC_CONFIG=1
+You need to set this env var to allow the app to overwrite the fsspec config file: OVERWRITE_FSSPEC_CONFIG=1
 
+At present, when reading into `xarray`, there is some code to ensure that the 
+config file is written and that environment variables are set properly.
+
+In future we expect to be able to remove this code - and it is not needed if using anonymous access.
 
 ## Performance testing
 
@@ -94,14 +133,71 @@ Our initial tests, having only run once, came out as follows:
 
 Table of test timings (in seconds). Where multiple values appear, the test was run multiple times.
 
+
 |---------------------|---------------------------|----------------------------|
 | Test type           | Read/process small subset | Read/process larger subset |
 |---------------------|---------------------------|----------------------------|
-| POSIX Kerchunk      |                       0.7 |                      37.9  |
-| S3-Quobyte Kerchunk |                       1.1 |                       8.5  |
-| S3-DataCore Zarr    |                      |                        |
+| POSIX Kerchunk      |                  1.0, 0.7 |                 15.2, 37.9 |
+| S3-Quobyte Kerchunk |             1.1, 4.7, 1.3 |            8.5,  9.1,  5.7 |
+| S3-DataCore Zarr    |                  3.9, 3.8 |                 99.8, 99.2 |
 | POSIX Xarray        |                  0.6, 0.9 |                 86.0, 91.4 |
 |---------------------|---------------------------|----------------------------|
 
 We need to run these repeatedly to validate them.
+
+### Test types
+
+The test types are:
+1. POSIX Kerchunk:
+  - This uses a Kerchunk index file on the POSIX file system
+  - It references NetCDF files on the POSIX file system
+  - There is no use of object-store
+  - This test depends on having pre-generated the Kerchunk index file
+2. S3-Quobyte Kerchunk:
+  - This uses a Kerchunk index file in the JASMIN S3-Quobyte object-store
+  - It references NetCDF files in the S3-Quobyte object-store 
+    - The files are actually part of the CEDA Archive and are exposed via an S3 interface
+  - There is no use of the POSIX file systems
+  - This test depends on having pre-generated the Kerchunk index file
+3. S3-DataCore Zarr:
+  - This reads a Zarr file that we have copied into the JASMIN DataCore (formerly Caringo) object-store
+  - The data is the same content as used for the other tests, converted from NetCDF to Zarr
+  - There is no use of Kerchunk
+  - This test depends on having pre-generated the Zarr file from NetCDF
+4. POSIX Xarray:
+  - This reads all the NetCDF files directly into Xarray (as a list of files)
+  - The files are read directly from the POSIX file system 
+  - There is no pre-generation step for this test
+  - This is slower because the aggregation of the NetCDF content is done on-the-fly
+
+### Test data
+
+The test data, being used is a list of 279 data files from the CCI archive, under the directory:
+
+```
+/neodc/esacci/ocean_colour/data/v5.0-release/geographic/netcdf/chlor_a/monthly/v5.0/
+```
+
+The first and last files are:
+
+```
+First: .../1997/ESACCI-OC-L3S-CHLOR_A-MERGED-1M_MONTHLY_4km_GEO_PML_OCx-199709-fv5.0.nc 
+Last:  .../2020/ESACCI-OC-L3S-CHLOR_A-MERGED-1M_MONTHLY_4km_GEO_PML_OCx-202011-fv5.0.nc 
+```
+
+### Test details
+
+In all cases the test is run as follows.
+
+Test 1 - Read/process small subset:
+
+1. Load the data as an `xarray.Dataset` object.
+2. Create a small time/lat/lon slice of shape: `(2, 144, 72)` (only 2 time steps == 2 files)
+3. Calculate the maximum value and assert it equals the expected value.     s = time.time()
+
+Test 2 - Read/process larger subset:
+
+1. Load the data as an `xarray.Dataset` object.
+2. Create a larger time/lat/lon slice of shape: `(279, 12, 24)` (279 time steps == 279 files)
+3. Calculate the maximum value and assert it equals the expected value. 
 

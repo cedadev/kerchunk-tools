@@ -39,7 +39,7 @@ def setup_configs(key, secret, url, purge=True):
 #    os.environ["AWS_CONFIG_FILE"] = aws_file
     # !!!Because of an asyncio call (I think) - the FSSPEC_CONFIG_DIR environment variable does not persist in the stack
     # !!!You can overcome this by writing the file to the expected location: ~/.config/fsspec/conf.json
-#    os.environ["FSSPEC_CONFIG_DIR"] = tmpdir
+    os.environ["FSSPEC_CONFIG_DIR"] = dr
     os.environ["AWS_ACCESS_KEY_ID"] = key
     os.environ["AWS_SECRET_ACCESS_KEY"] = secret
 
