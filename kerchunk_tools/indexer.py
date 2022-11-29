@@ -51,7 +51,7 @@ class Indexer:
         mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
         return mzz.translate() 
 
-    def create(self, file_uris, prefix, output_path="index.json", max_bytes=-1, xarray_args=None):
+    def create(self, file_uris, prefix, output_path="index.json", max_bytes=-1):
         self.update_max_bytes(max_bytes)
         file_uris = [file_uris] if isinstance(file_uris, str) else file_uris
 
