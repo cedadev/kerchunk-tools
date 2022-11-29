@@ -107,3 +107,8 @@ ENV/
 
 # local settings
 setup-env.sh
+
+# Tests data
+tests/kct-test*
+tests/kc-indexes
+

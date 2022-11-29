@@ -5,6 +5,7 @@ import numpy as np
 from minio import Minio
 import kerchunk_tools as kct
 import pytest
+import xarray as xr
 
 from tests.common import BASE_DIR, TEST_DATA_POSIX
 
@@ -13,32 +14,28 @@ pytestmark = pytest.mark.skipif(
     not os.path.isdir(BASE_DIR), 
     reason=f"Data dir {BASE_DIR} not mounted.")
 
-access_keys = "token", "secret", "endpoint_url"
+req_keys = "token", "secret", "endpoint_url"
 s3_config = {}
 
-bucket_id = "kct-test-s3-quobyte-6"
+bucket_id = "kct-test-s3-quobyte-7"
 single_index_json = "single_index.json"
 multi_index_json = "multi_index.json"
 
 file_uris = []
 mc = None
 
-
-print("""!!!NOTE!!! he async interactions between
-      botocore and aiobotocore appeared to lose the 'endpoint_url' setting!!!!
-      The solution is to ensure that this file exists: ~/.config/fsspec/conf.json
-      
-```
+# Here is how you can run the tests at the command-line
+"""
 S3_TOKEN=token S3_SECRET=secret S3_ENDPOINT_URL=endpoint pytest -v tests/test_workflows/test_workflow_s3_quobyte_single.py
-```
-      """)
+"""
+
 
 def setup_module():
-    if len(s3_config) == len(access_keys):
+    if len(s3_config) == len(req_keys):
         # All good
         return
 
-    for key in access_keys:
+    for key in req_keys:
         env_var_key = f"s3_{key}".upper()
         value = os.environ.get(env_var_key)
 
@@ -139,7 +136,6 @@ def test_s3_quobyte_multiple_read_data():
 
 
 def test_posix_multiple_read_data():
-    import xarray as xr
     ds = xr.open_mfdataset(TEST_DATA_POSIX, combine="by_coords", use_cftime=True) #, combine="by_coords")
     subset = ds.sel(time=slice("1850-01-01", "1909-01-01"), lat=slice(0, 1), lon=slice(20, 21), plev=1000)
 

@@ -54,11 +54,7 @@ Here is an example of using `kerchunk_tools` with authentication to the
 S3 service:
 
 ```
-# NOTE: OVERWRITE_FSSPEC_CONFIG is set to avoid a warning that it might
-#       overwrite a file in your home directory.
-#       Insert your credentials into the `s3_config` dictionary.
-
-$ OVERWRITE_FSSPEC_CONFIG=1 python
+$ python
 
 import kerchunk_tools as kct
 
@@ -68,13 +64,20 @@ s3_config = {
     "endpoint_url": "ENDPOINT_URL"
 }
 
+# Load a Kerchunk file
 index_uri = "s3://kc-indexes/ESACCI-OC-L3S-CHLOR_A-MERGED-1M_MONTHLY_4km_GEO_PML_OCx-fv5.0.json"
 ds = kct.wrap_xr_open(index_uri, s3_config=s3_config)
 
+# Look at the metadata
 print(ds)
 chlor_a = ds.chlor_a
 
 print(ds.shape, ds.dims)
+
+# Look at the data
+max_slice = ds.chlor_a.sel(time=slice("2020-01-01", "2020-02-22"), lat=slice(40, 34), lon=slice(20, 23)))
+print(float(max_slice))
+
 ```
 
 ## Testing
@@ -92,40 +95,8 @@ Then you can run a full workflow that:
  - read from the kerchunk files and extract/process a subset of data
 
 ```
-OVERWRITE_FSSPEC_CONFIG=1 S3_TOKEN=s3_token S3_SECRET=s3_secret S3_ENDPOINT_URL=s3_endpoint pytest tests/test_workflows/test_workflow_s3_quobyte_single.py -v
+S3_TOKEN=s3_token S3_SECRET=s3_secret S3_ENDPOINT_URL=s3_endpoint pytest tests/test_workflows/test_workflow_s3_quobyte_single.py -v
 ```
-
-## NOTE ABOUT HACK FOR KEEPING TRACK OF S3 CONFIG
-
-The S3 Config details appear to get lost in the Xarray-Zarr interface to S3.
-
-The effect is:
- - metadata is read
- - but when it attempts to read data: an internal error means it cannot do so
-
-It is possible to overcome this by NOT using env vars, but ensuring this file exists:
-
-
-```
-$ cat ~/.config/fsspec/conf.json
-{
-    "s3": {
-        "client_kwargs": {
-            "endpoint_url": "ENDPOINT_URL" 
-        }
-    }
-}
-
-```
-
-The above overcomes the problem - and doesn't lose track of the environment.
-
-You need to set this env var to allow the app to overwrite the fsspec config file: OVERWRITE_FSSPEC_CONFIG=1
-
-At present, when reading into `xarray`, there is some code to ensure that the 
-config file is written and that environment variables are set properly.
-
-In future we expect to be able to remove this code - and it is not needed if using anonymous access.
 
 ## Performance testing
 
@@ -134,14 +105,12 @@ Our initial tests, having only run once, came out as follows:
 Table of test timings (in seconds). Where multiple values appear, the test was run multiple times.
 
 
-|---------------------|---------------------------|----------------------------|
 | Test type           | Read/process small subset | Read/process larger subset |
 |---------------------|---------------------------|----------------------------|
 | POSIX Kerchunk      |                  1.0, 0.7 |                 15.2, 37.9 |
 | S3-Quobyte Kerchunk |             1.1, 4.7, 1.3 |            8.5,  9.1,  5.7 |
 | S3-DataCore Zarr    |                  3.9, 3.8 |                 99.8, 99.2 |
 | POSIX Xarray        |                  0.6, 0.9 |                 86.0, 91.4 |
-|---------------------|---------------------------|----------------------------|
 
 We need to run these repeatedly to validate them.
 
