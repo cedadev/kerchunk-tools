@@ -22,7 +22,7 @@ The tools included here allow:
 
 From scratch, you can conda install with:
 
-```
+```bash
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh -p ~/miniconda -b
 
@@ -37,7 +37,7 @@ pip install -e . --no-deps
 
 Assuming you have Python 3 installed, you can also install with Pip:
 
-```
+```bash
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
@@ -53,9 +53,7 @@ NOTE: this installation method generated a lot of HDF5 library warnings
 Here is an example of using `kerchunk_tools` with authentication to the 
 S3 service:
 
-```
-$ python
-
+```python
 import kerchunk_tools as kct
 
 s3_config = {
