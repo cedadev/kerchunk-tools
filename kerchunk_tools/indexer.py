@@ -6,6 +6,8 @@ from kerchunk.combine import MultiZarrToZarr
 
 from urllib.parse import urlparse
 
+from .utils import prepare_dir
+
 
 class Indexer:
 
@@ -83,6 +85,7 @@ class Indexer:
             with fsspec.open(output_uri, "wb", **self.fssopts) as kc_file:
                 kc_file.write(json_to_write)
         else:
+            prepare_dir(os.path.dirname(output_uri))
             with open(output_uri, "wb") as kc_file:
                 kc_file.write(json_to_write)
 
