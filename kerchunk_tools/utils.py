@@ -12,10 +12,13 @@ def map_archive_path(pth):
     realpath = os.path.realpath(pth)
     print(f"[DEBUG] Realpath: {realpath}")
     match = "/".join(realpath.split("/")[3:6])
-    match=match+"/"
     suffix = "/".join(realpath.split("/")[6:])
-    end_path = f"s3://s3-{match}{suffix}"
-    if match=="data/" and suffix=="":
+    
+    end = "/" if pth.endswith("/") else ""
+    sep = "/" if suffix else ""
+    
+    end_path = f"s3://s3-{match}{sep}{suffix}{end}"
+    if match=="data" and suffix=="":
         return("path does not exist")
     return end_path
 

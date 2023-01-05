@@ -5,6 +5,11 @@ __contact__ = 'ag.stephens@stfc.ac.uk'
 __copyright__ = "Copyright 2022 United Kingdom Research and Innovation"
 __license__ = "BSD - see LICENSE file in top-level package directory"
 
+
+from .indexer import Indexer
+from .xarray_wrapper import wrap_xr_open
+
+
 import sys
 import json
 import click
