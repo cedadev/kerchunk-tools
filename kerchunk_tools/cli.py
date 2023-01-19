@@ -6,15 +6,15 @@ __copyright__ = "Copyright 2022 United Kingdom Research and Innovation"
 __license__ = "BSD - see LICENSE file in top-level package directory"
 
 
-from .indexer import Indexer
-from .xarray_wrapper import wrap_xr_open
-
+from .indexer import Indexer                     #had a . before the word before import, was in __init__.py
+from .xarray_wrapper import wrap_xr_open         #had a . before the word before import, was in __init__.py
+from .utils import map_archive_path
 
 import sys
 import json
 import click
 
-import kerchunk_tools as kct
+
 
 DEFAULTS = {
     "prefix": "kc-indexes",
@@ -29,7 +29,7 @@ def main():
     return 0
 
 
-def parse_s3_config_file(fpath):
+def parse_s3_config_file(fpath):########################################
     return json.load(open(fpath))
 
 @main.command()
@@ -48,8 +48,21 @@ def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"],
 
     file_uris = open(file_uris_file).read().strip().split() if file_uris_file else file_uris
 
-    indexer = kct.indexer.Indexer(s3_config=s3_config, max_bytes=max_bytes)
+    indexer = Indexer(s3_config=s3_config, max_bytes=max_bytes)
     indexer.create(file_uris, prefix, output_path=output_path, max_bytes=max_bytes)
+
+
+
+
+
+@main.command()
+@click.argument("filepath") 
+def map(filepath):
+    new_path = map_archive_path(filepath)
+    print(new_path)
+    return(new_path)
+
+
 
 
 @main.command()

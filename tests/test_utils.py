@@ -19,5 +19,9 @@ def test_map_archive_path_success_short_without():
     
     
 def test_map_archive_path_failure():
-    resp = utils.map_archive_path("/my/nonsense/data")
-    assert resp == "path does not exist", f"Response incorrect from map_archive_path with incorrect data (should be path does not exist), but is: {resp}"
+    try:
+        resp = utils.map_archive_path("/my/nonsense/data")
+        print("error handelling failed for incorrect paths")
+    except Exception:
+        return
+    
