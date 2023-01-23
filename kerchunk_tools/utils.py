@@ -21,3 +21,5 @@ def map_archive_path(pth):
     
     end_path = f"s3://s3-{match}{sep}{suffix}{end}"
     return end_path
+
+
