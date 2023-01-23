@@ -39,16 +39,17 @@ def parse_s3_config_file(fpath):
 @click.option("-o", "--output-path", default=DEFAULTS["output_path"])
 @click.option("-b", "--max-bytes", default=DEFAULTS["max_bytes"])
 @click.option("-c", "--s3-config-file", default=None)
+@click.option("-C", "--cache_dir", default=None)
 def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"], 
            output_path=DEFAULTS["output_path"], max_bytes=DEFAULTS["max_bytes"],
-           s3_config_file=None):
+           s3_config_file=None, cache_dir=None):
     s3_config = parse_s3_config_file(s3_config_file) if s3_config_file else None
     if file_uris and file_uris_file:
         raise ValueError(f"Tool does not support setting BOTH 'file_uris' and 'file_uris_file' options")
 
     file_uris = open(file_uris_file).read().strip().split() if file_uris_file else file_uris
 
-    indexer = kct.indexer.Indexer(s3_config=s3_config, max_bytes=max_bytes)
+    indexer = kct.indexer.Indexer(s3_config=s3_config, cache_dir=cache_dir)
     indexer.create(file_uris, prefix, output_path=output_path, max_bytes=max_bytes)
 
 
