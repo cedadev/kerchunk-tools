@@ -6,7 +6,7 @@ from kerchunk.combine import MultiZarrToZarr
 
 from urllib.parse import urlparse
 
-from .utils import prepare_dir
+from .utils import prepare_dir           #had a . before the word before import
 
 
 class Indexer:
