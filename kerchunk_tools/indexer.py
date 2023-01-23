@@ -36,7 +36,7 @@ class Indexer:
         return f"{self.uri_prefix}{prefix}/{output_path}"
 
     def _kc_read_single_posix(self, file_uri):
-        return kerchunk.hdf.SingleHdf5ToZarr(file_uri).translate()
+        return kerchunk.hdf.SingleHdf5ToZarr(file_uri, inline_threshold=self.max_bytes).translate()
 
     def _kc_read_single_s3(self, file_uri):
         with fsspec.open(file_uri, "rb", **self.fssopts) as input_fss:
@@ -55,7 +55,7 @@ class Indexer:
 
     def create(self, file_uris, prefix, output_path="index.json", max_bytes=-1):
         self.update_max_bytes(max_bytes)
-        file_uris = [file_uris] if isinstance(file_uris, str) else file_uris
+        file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
 
         # Loop through data files collecting their metadata
         single_indexes = []

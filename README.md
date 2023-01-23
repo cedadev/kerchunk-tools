@@ -168,3 +168,21 @@ Test 2 - Read/process larger subset:
 2. Create a larger time/lat/lon slice of shape: `(279, 12, 24)` (279 time steps == 279 files)
 3. Calculate the maximum value and assert it equals the expected value. 
 
+
+## Background reading and resources
+
+These resources may be useful for understanding why we wanted to look at Kerchunk and how it fits into our bigger picture plans at CEDA:
+
+JASMIN Notebook service intro: https://www.youtube.com/watch?v=nle9teGLAb0&list=PLhF74YhqhjqmZgbQLu_PXZmA27q7vHygg
+
+JASMIN Notebooks workshop tutorial: https://www.youtube.com/watch?v=7UWjhIKq2x0&list=PLhF74Yhqhjqn8NDgU7xfKGLGP8h-FQ1lt&index=16
+
+Notebook that I showed (demonstrating intake access to CMIP6): https://github.com/cedadev/cmip6-object-store/blob/master/notebooks/cmip6-zarr-jasmin.ipynb
+
+Intake library documentation: https://intake.readthedocs.io/en/latest/?badge=latest
+
+Intake ESM (for Earth System Model data) docs: https://intake-esm.readthedocs.io/en/stable/
+
+Kerchunk docs: https://fsspec.github.io/kerchunk/
+
+Useful intro talk on Kerchunk (when it was called ReferenceFileSystem - I think): https://www.youtube.com/watch?v=AWJzDk6M6NM&t=628s
