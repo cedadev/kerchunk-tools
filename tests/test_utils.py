@@ -24,4 +24,3 @@ def test_map_archive_path_failure():
         resp = utils.map_archive_path(pth)
 
     assert str(excinfo.value) == expected, f"Response incorrect from map_archive_path with incorrect data (should be '{expected}'), but is: {resp}"
-

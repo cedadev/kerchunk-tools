@@ -20,6 +20,4 @@ def map_archive_path(pth):
     sep = "/" if suffix else ""
     
     end_path = f"s3://s3-{match}{sep}{suffix}{end}"
-
     return end_path
-
