@@ -37,7 +37,6 @@ class Indexer:
         return f"{self.uri_prefix}{prefix}/{output_path}"
 
     def _kc_read_single_posix(self, file_uri):
-        sdfsdf
         return kerchunk.hdf.SingleHdf5ToZarr(file_uri, inline_threshold=self.max_bytes).translate()
 
     def _kc_read_single_s3(self, file_uri):

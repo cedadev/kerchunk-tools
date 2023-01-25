@@ -29,12 +29,16 @@ def test_cli_help_option_success():
     
     thing = """Usage: kerchunk_tools create [OPTIONS] [FILE_URIS]...
 
+  Create a Kerchunk index file and save to POSIX/object-store. If multiple
+  file_uris provided then aggregate them.
+
 Options:
   -f, --file-uris-file TEXT
   -p, --prefix TEXT
   -o, --output-path TEXT
   -b, --max-bytes INTEGER
   -c, --s3-config-file TEXT
+  -C, --cache_dir TEXT
   --help                     Show this message and exit.
 """
 
@@ -46,8 +50,8 @@ def test_cli_single_path_success():
     stream = os.popen('kerchunk_tools create -p outputs/kc-indexes/files -o CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json -b 50000 /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc')
     output = stream.read()
     print(output, "OUTPUT TEXT #################")
-    thing = """Reading: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
-Written file: outputs/kc-indexes/files/CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json
+    thing = """[INFO] Processing: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
+[INFO] Written file: outputs/kc-indexes/files/CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json
 """
     assert output == thing, f"incorrect response for single path data   got: {output}"
 
@@ -57,10 +61,10 @@ def test_cli_multiple_file_success():
     stream = os.popen('kerchunk_tools create -p outputs/kc-indexes/files -o CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json -b 50000 /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1950-2014.nc')
     output = stream.read()
     print(output, "OUTPUT TEXT #################")
-    thing = """Reading: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
-Reading: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
-Reading: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1950-2014.nc
-Written file: outputs/kc-indexes/files/CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json
+    thing = """[INFO] Processing: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
+[INFO] Processing: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
+[INFO] Processing: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1950-2014.nc
+[INFO] Written file: outputs/kc-indexes/files/CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json
 """
     assert output == thing, f"incorrect response for multiple path data   got: {output}"
 
@@ -111,10 +115,10 @@ def test_cli_files_uris_file_works():
     stream = os.popen('kerchunk_tools create -f pathlist.txt -p outputs/kc-indexes/files -o TEST.CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json -b 50000')
     output = stream.read()
     print(output, "OUTPUT TEXT #################")
-    thing = """Reading: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
-Reading: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
-Reading: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1950-2014.nc
-Written file: outputs/kc-indexes/files/TEST.CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json
+    thing = """[INFO] Processing: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
+[INFO] Processing: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
+[INFO] Processing: /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1950-2014.nc
+[INFO] Written file: outputs/kc-indexes/files/TEST.CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json
 """
     assert output == thing, f"incorrect response for multiple path data using a file to get the information   got: {output}"
     
