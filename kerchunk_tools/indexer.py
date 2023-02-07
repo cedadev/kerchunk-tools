@@ -9,11 +9,23 @@ from urllib.parse import urlparse
 from .utils import prepare_dir           #had a . before the word before import
 
 
+def normalise_datetimes(content, time_attrs):
+    print(content, "content")
+    print(time_attrs, "time_attrs")
+    #print("HI", type(x), list(x.keys()))
+    #navigate to JSON file to find key/values that represent the time attriburestime values and potentially any bounds that relate to time (as linked via the attribute: time:bounds)
+    
+#def normalise_datetimes(times, frm_units, frm_calendar, to_units, to_calendar):
+#    import cftime
+#    dates = cftime.num2date(times, frm_units, frm_calendar)
+#    return cftime.date2num(dates, to_units, to_calendar)
+    
+
 class Indexer:
 
     MAX_INDEXED_ARRAY_SIZE_IN_BYTES = 10000
 
-    def __init__(self, s3_config=None, max_bytes=-1, cache_dir=None):
+    def __init__(self, s3_config=None, max_bytes=-1, cache_dir=None, use_time=None):
         if s3_config:
             self.scheme = "s3"
             self.uri_prefix = "s3://"
@@ -26,6 +38,12 @@ class Indexer:
         else:
             self.scheme = "posix"
             self.uri_prefix = ""
+            
+        if use_time == None:
+            self.use_time = None
+            
+        if use_time:
+            self.use_time = "exists"
 
         self.cache_dir = cache_dir
         self.update_max_bytes(max_bytes)
@@ -44,14 +62,19 @@ class Indexer:
             # generate kerchunk and write to buffer
             return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
-    def _build_multizarr(self, singles):
+    def _build_multizarr(self, singles, skip=None):
         kwargs = {}
 
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
             kwargs["remote_options"] = self.fssopts
       
-        mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
+        if self.use_time == "exists" and skip == False:
+            mzz = MultiZarrToZarr(singles, concat_dims=["time"], preprocess=normalise_datetimes, **kwargs)
+        
+        if self.use_time == None or skip==None:
+            mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs)
+        
         return mzz.translate() 
 
     def create(self, file_uris, prefix, output_path="index.json", max_bytes=-1):
@@ -80,10 +103,37 @@ class Indexer:
             single_indexes = maker.load_cached_jsons()
 
         # Decide JSON content
+
+        #print(single_indexes[0])####################### single_indexes shows the json of the thing
+        import re
+        dates = None
+        skip = None
+        for item in range(len(file_uris)):
+            d=(single_indexes[item])
+            d2=d["refs"]
+            d3=d2["time/.zattrs"]
+            
+            res = d3.split('\n    "units": ', 1)
+            new_string = res[1]
+            result = re.search('"days since (.*)"', new_string)
+            date=(result.group(1))
+            if dates:
+                if dates == date:
+                    pass
+                else:
+                    skip = False
+                    
+            if dates == None:
+                dates = date
+                
+        if skip == False:
+            print("[INFO] THE DATES UNITS ARE DIFFERENT FOR SOME OF THE FILES IF YOU HAVEN'T DONE SO ALREADY YOU MAY WANT TO RUN WITH -t TO NORMALISE THE DATETIMES TO AVOID CONCATINATION ERRORS!!")
+
+
         if len(file_uris) == 1:
             json_content = single_indexes[0]
         else:
-            json_content = self._build_multizarr(single_indexes)
+            json_content = self._build_multizarr(single_indexes, skip)
 
         json_to_write = json.dumps(json_content).encode()
 
