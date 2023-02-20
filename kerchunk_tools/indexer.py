@@ -34,28 +34,6 @@ def normalise_datetimes(var):
     time_origin = ref_time["time_origin"]
     
     d3=var["time/.zattrs"]
-            
-    res = d3.split('\n    "units": ', 1)
-    new_string = res[1]
-    result = re.search('"days since (.*)"', new_string)
-    date=(result.group(1))
-    
-    time_origin_short = (date.split())[0]
-    date_short = (date.split())[0]
-    
-    print(d3)
-    
-    time_origin_date = datetime.datetime.strptime(time_origin,"%Y-%m-%d %H:%M:%S")
-    date_date = datetime.datetime.strptime(date,"%Y-%m-%d %H:%M:%S")
-    
-    delta = date_date - time_origin_date
-    
-    days_difference = delta.days
-
-    print(days_difference)
-
-
-    convert_times(d3, ref_time)
 
     
     lis=[]
@@ -101,15 +79,38 @@ def normalise_datetimes(var):
     #print(lis2)
     
     
-    def convert_times(times, frm_units, frm_calendar, to_units, to_calendar):
-        dates = cftime.num2date(times, frm_units, frm_calendar)#gets datetime from int in calender time
-        return cftime.date2num(dates, to_units, to_calendar)#convrets back to into in other calender
+    
+    units_before = d3.split('\n    "units": ', 1)
+    units = units_before[1]
+    result = re.search('"(.*)"', units)
+    date = (result.group(1))
+    
+    calendar_before = d3.split('\n    "calendar": ', 1)
+    calendar = calendar_before[1]
+    result2 = re.search('"(.*)"', calendar)
+    date2 = (result2.group(1))
     
     
-    #def date2num(info, date_from):
-    #days_since = date_from["time_origin"]
-    #units = ("days since", date_since)
-    #return cftime.date2num(date, units, calendar)
+    print(d3)
+    print(ref_time)
+    print("")
+    print("")
+    
+    time = lis
+    frm_units = date
+    frm_calendar = date2
+    to_units = ref_time["units"]
+    to_calendar = ref_time["calendar"]
+    
+    print(lis)
+    print(convert_times(time, frm_units, frm_calendar, to_units, to_calendar))
+    
+    
+    
+def convert_times(time, frm_units, frm_calendar, to_units, to_calendar):#frm_units = "units": "days since 2015-01-01 00:00:00",    frm_calendar = "calendar": "gregorian",    time = single floating point number/array
+    dates = cftime.num2date(time, frm_units, frm_calendar)
+    return cftime.date2num(dates, to_units, to_calendar)
+    
     
 def encode_base_64(val, sub):
     if sub == "time_bound":
