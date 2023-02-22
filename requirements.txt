@@ -11,3 +11,4 @@ numpy
 requests
 s3fs
 xarray
+zstd

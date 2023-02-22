@@ -1,5 +1,6 @@
 import os
 import json
+import ujson
 import fsspec
 import kerchunk.hdf
 from kerchunk.combine import MultiZarrToZarr
@@ -26,6 +27,7 @@ class Indexer:
         else:
             self.scheme = "posix"
             self.uri_prefix = ""
+            self.fssopts = {}
 
         self.cache_dir = cache_dir
         self.update_max_bytes(max_bytes)
@@ -54,7 +56,7 @@ class Indexer:
         mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
         return mzz.translate() 
 
-    def create(self, file_uris, prefix, output_path="index.json", max_bytes=-1):
+    def create(self, file_uris, prefix, output_path="index.json", compression=None, max_bytes=-1):
         self.update_max_bytes(max_bytes)
         file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
 
@@ -85,18 +87,20 @@ class Indexer:
         else:
             json_content = self._build_multizarr(single_indexes)
 
-        json_to_write = json.dumps(json_content).encode()
-
-        # Define output file uri
+        # Define output file uri and mode
         output_uri = self._get_output_uri(prefix, output_path)
+        mode = "wt" if compression == "zstd" else "wb"
 
-        if self.scheme == "s3":
-            with fsspec.open(output_uri, "wb", **self.fssopts) as kc_file:
-                kc_file.write(json_to_write)
-        else:
+        # Create directory if writing to file system
+        if self.scheme == "posix":
             prepare_dir(os.path.dirname(output_uri))
-            with open(output_uri, "wb") as kc_file:
-                kc_file.write(json_to_write)
+
+        # Write either text with compression or JSON encoded as a byte-stream
+        with fsspec.open(output_uri, mode, compression=compression, **self.fssopts) as kc_file:
+            if compression:
+                ujson.dump(json_content, kc_file) 
+            else:
+                kc_file.write(json.dumps(json_content).encode())
 
         print(f"[INFO] Written file: {output_uri}")
         return output_uri
