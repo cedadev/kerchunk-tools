@@ -103,8 +103,8 @@ def normalise_datetimes(var):
     to_calendar = ref_time["calendar"]
     
     print(lis)
-    print(convert_times(time, frm_units, frm_calendar, to_units, to_calendar))
-    
+    new_times = (convert_times(time, frm_units, frm_calendar, to_units, to_calendar))
+    print(new_times)
     
     
 def convert_times(time, frm_units, frm_calendar, to_units, to_calendar):#frm_units = "units": "days since 2015-01-01 00:00:00",    frm_calendar = "calendar": "gregorian",    time = single floating point number/array
