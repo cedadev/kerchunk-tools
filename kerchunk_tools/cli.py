@@ -39,11 +39,12 @@ def parse_s3_config_file(fpath):
 @click.option("-p", "--prefix", default=DEFAULTS["prefix"])
 @click.option("-o", "--output-path", default=DEFAULTS["output_path"])
 @click.option("-b", "--max-bytes", default=DEFAULTS["max_bytes"])
-@click.option("-c", "--s3-config-file", default=None)
+@click.option("-s", "--s3-config-file", default=None)
+@click.option("-c", "--compression", default=None)
 @click.option("-C", "--cache_dir", default=None)
 def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"], 
            output_path=DEFAULTS["output_path"], max_bytes=DEFAULTS["max_bytes"],
-           s3_config_file=None, cache_dir=None):
+           s3_config_file=None, compression=None, cache_dir=None):
     """
     Create a Kerchunk index file and save to POSIX/object-store. If multiple
     file_uris provided then aggregate them.
@@ -55,7 +56,7 @@ def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"],
     file_uris = open(file_uris_file).read().strip().split() if file_uris_file else file_uris
 
     indexer = Indexer(s3_config=s3_config, max_bytes=max_bytes, cache_dir=cache_dir)
-    indexer.create(file_uris, prefix, output_path=output_path, max_bytes=max_bytes)
+    indexer.create(file_uris, prefix, output_path=output_path, compression=compression, max_bytes=max_bytes)
 
 
 @main.command()

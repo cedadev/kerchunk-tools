@@ -47,7 +47,7 @@ class Indexer:
             return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
     def _build_multizarr(self, singles):
-        kwargs = {}
+        kwargs = {"coo_map": {"time": "cf:time"}}
 
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
