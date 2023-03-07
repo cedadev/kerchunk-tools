@@ -63,19 +63,23 @@ s3_config = {
 }
 
 # Load a Kerchunk file
-index_uri = "s3://kc-indexes/ESACCI-OC-L3S-CHLOR_A-MERGED-1M_MONTHLY_4km_GEO_PML_OCx-fv5.0.json"
+
+# Load a Kerchunk file
+index_uri = "s3://kc-indexes-cci-cloud-v2/BICEP-OC-L3S-PP-MERGED-1M_MONTHLY_9km_mapped-1998-2020-fv4.2.zstd"
 ds = wrap_xr.wrap_xr_open(index_uri, s3_config=s3_config)
 
 # Look at the metadata
 print(ds)
-chlor_a = ds.chlor_a
+pp = ds.pp
 
-print(ds.shape, ds.dims)
+print(pp.shape, pp.dims)
 
 # Look at the data
-max_slice = ds.chlor_a.sel(time=slice("2020-01-01", "2020-02-22"), lat=slice(40, 34), lon=slice(20, 23)))
-print(float(max_slice))
+mx = ds.pp.sel(time=slice("1998-03-01", "2000-02-01"), lat=slice(34, 40), lon=slice(20, 23)).max()
+mx = float(mx)
+print(mx)
 
+assert 2137 < mx < 2139
 ```
 
 ## Testing
