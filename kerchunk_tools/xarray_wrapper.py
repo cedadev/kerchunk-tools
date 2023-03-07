@@ -29,7 +29,10 @@ def _open_as_s3(file_uri, s3_config, compression=None):
                 "client_kwargs": {"endpoint_url": s3_config["endpoint_url"]}
     }
 
-    ref = s3fs.S3FileSystem(**fssopts).open(file_uri)
+    # Create S3FS file to read Kerchunk and then pass that into mapper
+    # NOTE: This is required when managing data that is not publicly visible in order
+    #       to respect the auth credentials in `fssopts`
+    ref = s3fs.S3FileSystem(**fssopts).open(file_uri, compression=compression)
     mapper = fsspec.get_mapper("reference://", fo=ref, target_protocol="http", 
                                remote_options=fssopts, target_options={"compression": compression})
     return xr.open_zarr(mapper, **_xr_open_args)

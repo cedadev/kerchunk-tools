@@ -54,7 +54,7 @@ Here is an example of using `kerchunk_tools` with authentication to the
 S3 service:
 
 ```python
-import kerchunk_tools as kct
+import kerchunk_tools.xarray_wrapper as wrap_xr
 
 s3_config = {
     "token": "TOKEN",
@@ -64,7 +64,7 @@ s3_config = {
 
 # Load a Kerchunk file
 index_uri = "s3://kc-indexes/ESACCI-OC-L3S-CHLOR_A-MERGED-1M_MONTHLY_4km_GEO_PML_OCx-fv5.0.json"
-ds = kct.wrap_xr_open(index_uri, s3_config=s3_config)
+ds = wrap_xr.wrap_xr_open(index_uri, s3_config=s3_config)
 
 # Look at the metadata
 print(ds)
