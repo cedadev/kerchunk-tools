@@ -46,8 +46,9 @@ class Indexer:
             # generate kerchunk and write to buffer
             return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
-    def _build_multizarr(self, singles):
-        kwargs = {"coo_map": {"time": "cf:time"}}
+    def _build_multizarr(self, singles, identical_dims=None):
+        kwargs = {"coo_map": {"time": "cf:time"},
+                  "identical_dims": identical_dims}
 
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
@@ -56,7 +57,7 @@ class Indexer:
         mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
         return mzz.translate() 
 
-    def create(self, file_uris, prefix, output_path="index.json", compression=None, max_bytes=-1):
+    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, max_bytes=-1):
         self.update_max_bytes(max_bytes)
         file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
 
@@ -85,7 +86,7 @@ class Indexer:
         if len(file_uris) == 1:
             json_content = single_indexes[0]
         else:
-            json_content = self._build_multizarr(single_indexes)
+            json_content = self._build_multizarr(single_indexes, identical_dims=identical_dims)
 
         # Define output file uri and mode
         output_uri = self._get_output_uri(prefix, output_path)
