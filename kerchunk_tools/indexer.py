@@ -38,10 +38,10 @@ class Indexer:
     def _get_output_uri(self, prefix, output_path):
         return f"{self.uri_prefix}{prefix}/{output_path}"
 
-    def _kc_read_single_posix(self, file_uri):
+    def _kc_read_single_posix(self, file_uri, keep_values=None):
         return kerchunk.hdf.SingleHdf5ToZarr(file_uri, inline_threshold=self.max_bytes).translate()
 
-    def _kc_read_single_s3(self, file_uri):
+    def _kc_read_single_s3(self, file_uri, keep_values=None):
         with fsspec.open(file_uri, "rb", **self.fssopts) as input_fss:
             # generate kerchunk and write to buffer
             return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
@@ -57,7 +57,8 @@ class Indexer:
         mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
         return mzz.translate() 
 
-    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, max_bytes=-1):
+    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, 
+               keep_values=None, compression=None, max_bytes=-1):
         self.update_max_bytes(max_bytes)
         file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
 
@@ -70,15 +71,19 @@ class Indexer:
         else:
             reader = self._kc_read_single_posix
 
+        # Create reader kwargs
+        reader_kwargs = {"keep_values": keep_values}
+
         # Loop through files either using in-memory or file-cache approach
         if not self.cache_dir:
             # Keep all single Kerchunk indexes in memory
             for file_uri in file_uris:
                 print(f"[INFO] Processing: {file_uri}")
-                single_indexes.append(reader(file_uri))
+                single_indexes.append(reader(file_uri, **reader_kwargs))
         else:
             # Use cache class to cache each Kerchunk file locally (optimised approach)
-            maker = SingleKerchunkMakerWithCacheDir(prefix, file_uris, reader, self.cache_dir)
+            maker = SingleKerchunkMakerWithCacheDir(prefix, file_uris, self.cache_dir, 
+                                                    reader, **reader_kwargs)
             maker.process() 
             single_indexes = maker.load_cached_jsons()
 
@@ -109,11 +114,12 @@ class Indexer:
 
 class SingleKerchunkMakerWithCacheDir:
 
-    def __init__(self, prefix, file_uris, reader, cache_dir):
+    def __init__(self, prefix, file_uris, cache_dir, reader, **reader_kwargs):
         self._prefix = prefix
         self._file_uris = file_uris
-        self._reader = reader
         self._dir = cache_dir
+        self._reader = reader
+        self._reader_kwargs = reader_kwargs
     
     def process(self):
         self._cleaned = False
@@ -158,7 +164,7 @@ class SingleKerchunkMakerWithCacheDir:
         open(restart_file, "w").write("")
 
         # Process the file here
-        json_content = self._reader(file_uri)
+        json_content = self._reader(file_uri, **self._reader_kwargs)
         json.dump(json_content, open(cache_file, "w"))
 
         print(f"[INFO] Cache file written: {cache_file}")
