@@ -7,14 +7,14 @@ from kerchunk.combine import MultiZarrToZarr
 
 from urllib.parse import urlparse
 
-from .utils import prepare_dir           #had a . before the word before import
+from utils import prepare_dir           #had a . before the word before import
 
 
 class Indexer:
 
     MAX_INDEXED_ARRAY_SIZE_IN_BYTES = 10000
 
-    def __init__(self, s3_config=None, max_bytes=-1, cache_dir=None):
+    def __init__(self, s3_config=None, max_bytes=-1, cache_dir=None, use_generators=None, remove_dims=None, b64vars=None):
         if s3_config:
             self.scheme = "s3"
             self.uri_prefix = "s3://"
@@ -31,6 +31,9 @@ class Indexer:
 
         self.cache_dir = cache_dir
         self.update_max_bytes(max_bytes)
+        self.use_generators = use_generators
+        self.remove_dims = remove_dims
+        self.b64vars = b64vars
 
     def update_max_bytes(self, max_bytes):
         self.max_bytes = max_bytes if max_bytes > 0 else self.MAX_INDEXED_ARRAY_SIZE_IN_BYTES
@@ -39,7 +42,8 @@ class Indexer:
         return f"{self.uri_prefix}{prefix}/{output_path}"
 
     def _kc_read_single_posix(self, file_uri):
-        return kerchunk.hdf.SingleHdf5ToZarr(file_uri, inline_threshold=self.max_bytes).translate()
+        from custom import SHdf5ToZarrCustom
+        return SHdf5ToZarrCustom(file_uri, inline_threshold=self.max_bytes, b64vars=self.b64vars).translate()
 
     def _kc_read_single_s3(self, file_uri):
         with fsspec.open(file_uri, "rb", **self.fssopts) as input_fss:
@@ -47,15 +51,19 @@ class Indexer:
             return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
     def _build_multizarr(self, singles, identical_dims=None):
+        from custom import MZarrToZarrCustom
         kwargs = {"coo_map": {"time": "cf:time"},
                   "identical_dims": identical_dims}
 
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
             kwargs["remote_options"] = self.fssopts
+        f = open('testsingle.json','w')
+        f.write(json.dumps(singles[0]))
+        f.close()
       
-        mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
-        return mzz.translate() 
+        mzz = MZarrToZarrCustom(singles, concat_dims=["time"], **kwargs) 
+        return mzz.translate(use_generators=self.use_generators, remove_dims=self.remove_dims) 
 
     def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, max_bytes=-1):
         self.update_max_bytes(max_bytes)
