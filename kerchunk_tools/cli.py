@@ -6,9 +6,9 @@ __copyright__ = "Copyright 2022 United Kingdom Research and Innovation"
 __license__ = "BSD - see LICENSE file in top-level package directory"
 
 
-from .indexer import Indexer
-from .xarray_wrapper import wrap_xr_open
-from .utils import map_archive_path
+from indexer import Indexer
+from xarray_wrapper import wrap_xr_open
+from utils import map_archive_path
 
 import sys
 import json
@@ -43,21 +43,26 @@ def parse_s3_config_file(fpath):
 @click.option("-i", "--identical-dims", default=None)
 @click.option("-c", "--compression", default=None)
 @click.option("-C", "--cache_dir", default=None)
+@click.option("-g", "--use_generators", default=None)
+@click.option("-r", "--remove_dims", default=None)
+@click.option("-v", "--b64vars", default=None)
 def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"], 
            output_path=DEFAULTS["output_path"], max_bytes=DEFAULTS["max_bytes"],
-           s3_config_file=None, identical_dims=None, compression=None, cache_dir=None):
+           s3_config_file=None, identical_dims=None, compression=None, cache_dir=None, 
+           use_generators=None, remove_dims=None, b64vars=None):
     """
     Create a Kerchunk index file and save to POSIX/object-store. If multiple
     file_uris provided then aggregate them.
     """
     s3_config = parse_s3_config_file(s3_config_file) if s3_config_file else None
     if file_uris and file_uris_file:
-        raise ValueError(f"Tool does not support setting BOTH 'file_uris' and 'file_uris_file' options")
+        raise ValueError("Tool does not support setting BOTH 'file_uris' and 'file_uris_file' options")
 
     file_uris = open(file_uris_file).read().strip().split() if file_uris_file else file_uris
     identical_dims = identical_dims.split(",") if identical_dims else None
 
-    indexer = Indexer(s3_config=s3_config, max_bytes=max_bytes, cache_dir=cache_dir)
+    indexer = Indexer(s3_config=s3_config, max_bytes=max_bytes, cache_dir=cache_dir,
+                      use_generators=use_generators, remove_dims=remove_dims, b64vars=b64vars)
     indexer.create(file_uris, prefix, output_path=output_path, identical_dims=identical_dims,
                    compression=compression, max_bytes=max_bytes)
 
