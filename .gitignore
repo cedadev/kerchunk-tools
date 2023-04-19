@@ -111,4 +111,4 @@ setup-env.sh
 # Tests data
 tests/kct-test*
 tests/kc-indexes
-
+*.json
