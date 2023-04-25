@@ -1,9 +1,11 @@
 from kerchunk.hdf import SingleHdf5ToZarr
 from kerchunk.combine import MultiZarrToZarr
 from kerchunk.utils import consolidate
+from fsspec.implementations.reference import ReferenceFileSystem
 
 import base64
 import json
+import jinja2
 
 gen_template = {
     "gen":[],
@@ -23,52 +25,158 @@ def checkdims(chunks):
         if dims[x] > 1:
             ndims += 1
     return dims, ndims
-    
 
-def get_url(fnames, index):
+def get_datelike(fname):
+    """
+    Locate datelike integer strings from the sample filename
+    Identify the start- and end-positions of the datelike structures.
+    Replace datelike structures with template language.
+    """
+    dcount = 0
+    dsets = []
+    dhold = []
+    in_date = False
+    for index in range(0,len(fname)-1):
+        char = fname[index]
+        if char + fname[index+1] in ['19','20'] and not in_date: # Simplified for these centuries
+            in_date = True
+            dhold.append(index)
+            dcount = 0
+        if char in '0123456789':
+            dcount += 1
+        if in_date:
+            if char not in '0123456789/' and dcount < 4:
+                # Abandon date
+                dhold = []
+                in_date = False
+            elif (char not in '0123456789/' or dcount > 8) and (dcount >= 4):
+                # Assume valid date
+                dhold.append(index)
+                dsets.append(dhold)
+                dhold = []
+                in_date = False
+            else:
+                pass
+    return dsets
+
+def get_url(fnames, index, force_dmode=None):
     """
     Need to get the first and last parts of the filenames that are consistent, then write with template language.
-    Assume monthly file format for now. May need to adapt for later.
+    Use cstring - custom string Template format for all dates, these can be decoded when reading in the kerchunk files.
     """
     if len(fnames) < 2:
         return fnames[0]
 
-    diffs = []
-    for x in range(len(fnames[0])):
-        if fnames[0][x] != fnames[-1][x] or fnames[0][x] != fnames[-2][x] :
-            diffs.append(x)
-    part1 = fnames[0][:diffs[0]]
-    part2 = fnames[0][diffs[-1]+1:]
-    print(part1, part2)
+    # Find the date-format objects
+    datesets = get_datelike(fnames[0])
+    # Typically two datesets, one pathbased and one complete
+    url = fnames[0][:datesets[0][0]]
+    dmode = ''
+    if not force_dmode:
+        try:
+            longdate = fnames[0][datesets[1][0]:datesets[1][1]].replace('/','')
+        except IndexError:
+            longdate = fnames[0][datesets[0][0]:datesets[0][1]].replace('/','')
 
-    if len(diffs) == 2: # Months
-        
-        offset = int(fnames[0][diffs[0]:diffs[-1]])
-        step = int(fnames[1][diffs[0]:diffs[-1]]) - offset
-    
-        url = part1 + "{{ '%02d' % ("
-        if offset > 1:
-            url += offset + '+' 
-        if step > 1:
-            url += '(' + index + '*' + step + '))}}' + part2
+        # Determine resolution of dates
+        if len(longdate) == 8:
+            dmode = 'd'
+        elif len(longdate) == 6:
+            dmode = 'm'
         else:
-            url += '(' + index + '))}}' + part2
-            
-    elif len(diffs) == 10: # Years
-        # Very specific filename structure
-        offset = int(fnames[0][diffs[0]:diffs[0]+4])
-        year = "{{(" + str(offset) + "+(" + str(index) + "/12))}}"
-        month = "{{'%02d' % " + index + "}}"
-        url = part1 + year + fnames[0][diffs[3]:diffs[4]] + year + month + part2
-    elif len(diffs) == 12: ## Daily years
-        # possibly more specific filename structure
-        init_year = int(fnames[0][diffs[0]:diffs[0]+4])
-        year = "{{(" + str(init_year) + "+(" + str(index) + "/365))}}"
+            dmode = 'y'
     else:
-        print(len(diffs))
-        url = ''
+        dmode = force_dmode
+
+    for x, d in enumerate(datesets):
+        date = fnames[0][d[0]:d[1]]
+        cstring = '{}'
+        if '/' in date:
+            cstring += 'p'
+        else:
+            cstring += 'f'
+        cstring += dmode
+        cstring += date.replace('/','')
+        cstring += index
+        if x != len(datesets)-1:
+            url += cstring + '{}' + fnames[0][d[1]:datesets[x+1][0]] # From end of this to start of next
+        else:
+            url += cstring + '{}' + fnames[0][d[1]:]
     return url
+
+def custom_url(templateurl, pr):
+
+    # Expect custom url format
+    # {}fd19990101i_pp{}
+    cstrings = templateurl.split('{}')
+    url = ''
+    for i, cs in enumerate(cstrings):
+        if i%2==1:
+            url += decode_cstring(cs, pr)
+        else:
+            url += cs
+    return url
+
+def decode_cstring(cstring, pr):
+    """
+    Custom url formatting:
+    f - 19990101: full formatting
+    p - 1999/01/01: path-based formatting
+
+    example: f19990101i_pp
+    """
+    fforms = {
+        4:"y",
+        6:"m",
+        8:"d"
+    }
+
+    def get_date(initial, count, fmode='d', dmode='d'):
+        """
+        Calculate new date based on the initial date and the iterator count.
+        Uses dmode for different date iteration schemes.
+        Uses fmode for date formats.
+        dmode and fmode can be equal but would not be in the case of 1999/01/... iterating by day.
+        """
+        formats = {
+            "d":"%Y%m%d",
+            "m":"%Y%m",
+            "y":"%Y"
+        }
+
+        dformat = formats[fmode]
+        import datetime.datetime
+        dayi = datetime.strptime(initial,dformat)
+        if dmode == 'd':
+            dayf = dayi + timedelta(days=count)
+        elif dmode == 'm':
+            dayf = dayi + timedelta(months=count)
+        else:
+            dayf = dayi + timedelta(years=count)
+        return dayf.strftime(dformat)
+
+    mode = cstring[0]
+    dmode = cstring[1]
+    init = ''
+    for c in cstring[2:]:
+        if c in '0123456789':
+            init += c
+    try:
+        fmode = fforms[len(init)]
+    except:
+        print('fmode error: unknown date format')
+        raise IndexError
     
+    var = cstring[1+len(init):]
+    year, month, day = get_date(init, pr[var], fmode=fmode, dmode=dmode)
+    if mode == 'f':
+        # Full path mode
+        return year + month + day
+    elif mode == 'p':
+        return year + '/' + month + '/' + day
+    else:
+        print('mode error: unknown init mode')
+        raise IndexError
 
 class SHdf5ToZarrCustom(SingleHdf5ToZarr):
     def __init__(
@@ -103,11 +211,12 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         self,
         path,
         **kwargs):
+        self.reference = None
         super().__init__(
             path,
             **kwargs)
 
-    def translate(self, filename=None, storage_options=None, use_generators=None, remove_dims=None):
+    def translate(self, filename=None, storage_options=None, use_generators=None, remove_dims=None, reference=None):
         """Custom Translator to add generators to the output json file.
 
         Performs normal translator functions
@@ -123,7 +232,9 @@ class MZarrToZarrCustom(MultiZarrToZarr):
                 self.out = self.postprocess(self.out)
             self.done.add(4)
         out = consolidate(self.out)
-        ## Additional step of using generators
+
+        # Set up custom generator code
+        self.reference = reference
         if use_generators:
             out = self.install_generators(out)
         if remove_dims:
@@ -135,144 +246,187 @@ class MZarrToZarrCustom(MultiZarrToZarr):
             with fsspec.open(filename, mode="wt", **(storage_options or {})) as f:
                 ujson.dump(out, f)
 
+    def access_reference(self):
+        """
+        Collect variables from netcdf reference file
+        Determine chunking dimensions (if chunking() == 2, assume lat/lon)
+        """
+        from netCDF4 import Dataset
+
+        reference = Dataset(self.reference)
+        maxdims = 0
+        checkvars = []
+        for var in reference.variables.keys():
+            dims = reference.variables[var].chunking()
+            if dims != 'contiguous':
+                ndims = 0
+                for dim in dims:
+                    if int(dim) > 1:
+                        ndims += 1
+                if ndims > maxdims:
+                    maxdims = ndims
+                    checkvars = []
+                if ndims == maxdims:
+                    checkvars.append(var)
+
+        # Find the number of chunks in lat and lon dimensions
+        chunkdimsizes = []
+        for dim in reference.variables[checkvars[0]].chunking():
+            if dim > 1:
+                chunkdimsizes.append(dim)
+
+        ndims = [
+            int(reference.dimensions['lat'].size/chunkdimsizes[0]),
+            int(reference.dimensions['lon'].size/chunkdimsizes[1]),
+        ]
+
+        return checkvars, ndims
+
+    def prepare_chunkarr(self, dims):
+        chunkarr = []
+        for x in range(dims[0]):
+            row = []
+            for y in range(dims[1]):
+                row.append(0)
+            chunkarr.append(row)
+        return chunkarr
+
     def install_generators(self, out):
+        import numpy as np
+        from scipy import stats
+        """
+        Generator install stages
+        1. Collect all variables that are to be chunked (see find chunk vars):
+        - determine chunking dimensions and numbers of chunks for stage 2
+        2. Collect missing chunks:
+        - select one variable and the first time slice to check all chunks (if there is spatial chunking at all)
+        - select one present and one missing chunk and check across all variables and times to check for inconsistencies.
+        - As current, collect metadata, chunk sizes etc.
+        4. Assemble metadata:
+        - Assemble key, url, offset, length and dimensions
+        """
         
-        ## Stage 1 - Collect and Associate all variable chunks
-        ## Also check for chunk uniformity per variable
-        ## Doing this in a single pass minimises number of repeats (O(2n) -> O(n))
-        
+        checkvars, dims = self.access_reference()
+        chunkarr = self.prepare_chunkarr(dims)
+
         chunkdict = {}
         var_clengths = {}
         nonuniforms = {}
-        
-        for key in out['refs'].keys():
-            try:
-                k = key.split('/')[0]
-                x = int(key.split('/')[1].split('.')[0])
-                if 'base64' not in out['refs'][key]:
-                    try:
-                        chunkdict[k].append(key)
-                    except KeyError:
-                        chunkdict[k] = [key]
 
-                    if k in var_clengths:
-                        if out['refs'][key][2] != var_clengths[k]:
-                            nonuniforms[k] = False
-                    else:
-                        var_clengths[k] = out['refs'][key][2]
-            except:
-                pass
-            
+        # Simple quick check for median chunk sizes
+        for var in checkvars:
+            # sample all chunks from first file
+            lengths = []
+            for i in range(dims[0]):
+                for j in range(dims[1]):
+                    key = var + '/0.' + str(i) + '.' + str(j)
+                    try:
+                        length = out['refs'][key][2]
+                        lengths.append(length)
+                    except KeyError:
+                        pass
+            var_clengths[var] = int(stats.mode(np.array(lengths))[0])
+        
+        # Collect chunk references to determine the numbers and dimensions of chunks
+
+        ### Single Key Pass ###
+        for key in out['refs'].keys():
+            if '/' in key:
+                var, vmeta = key.split('/')
+            else:
+                vmeta = key
+            if '.z' not in vmeta:
+
+                # Detection of missing chunks
+                coords = vmeta.split('.')
+                # If the variable has the right coord structure and the chunk length is correct.
+                if len(coords) == 3 and out['refs'][key][2] == var_clengths[var]:
+                    chunkarr[int(coords[1])][int(coords[2])] += 1
+
+                    try:
+                        chunkdict[var].append(key)
+                    except KeyError:
+                        chunkdict[var] = [key]
+        print('[INFO] Checking for mask')
+        # Check for consistent chunk gap masks
+        chunkarr = np.array(chunkarr)
+
+        # Construct chunk mask
+        maxmask = (chunkarr[:,:] == np.max(chunkarr))
+        
+        #is_min = (chunkarr[:,:] == np.min(chunkarr))
+        #if not np.all(np.logical_or(is_max, is_min)):
+            # Abort as the chunks are inconsistent
+            #print('InconsistentMaskAbort')                
+            #return None
+
+        
+        print('[INFO] Concatenating Gap Array')
+        # Concatenate to chunk gap array
+        skipchunks = []
+        for x, row in enumerate(maxmask):
+            for y, item in enumerate(row):
+                if item:
+                    skipchunks.append('{}.{}'.format(x,y))
+
         ## Stage 2 - Create simple generators for each variable, knowing that the chunks are uniform in size per variable
         generators = []
-        made_generators = False
         for var in chunkdict.keys():
-            if var not in nonuniforms:
-                # At least one variable is a uniform chunked set
-                made_generators = True
+            print(var)
+            # At least one variable is a uniform chunked set
+            made_generators = True
 
-                
-                chunks = chunkdict[var]
-                ## Need to determine nature of chunking so far within the variables - get the shape of global chunks
-                dims, ndims = checkdims(chunks)
-    
-                print('Ndims', ndims)
-                if ndims == 1: # Single chunking dimension
-                    index = 'i_' + var
-                    key = str(var) + '/'
-                    maindim = 0
-                    for x, dim in enumerate(dims):
-                        if x != 0:
-                            key += '.'
-                        if dim < 2:
-                            key += '0'
-                        else:
-                            key += '{{' + index + '}}'
-                            maindim = dim
-                    fnames = []
-                    for chunk in chunks:
-                        meta = out['refs'][chunk]
-                        offset = str(meta[1])
-                        fnames.append(meta[0])
-                    url = get_url(fnames, index)
-                    length = str(var_clengths[var])
-                    dimensions = {index: {"stop": maindim}}
-                                  
-                    generators.append({
-                        "key":key,
-                        "url":url,
-                        "offset":str(offset),
-                        "length":str(length),
-                        "dimensions":dimensions
-                    })
-                for chunk in chunkdict[var]:
-                    del out['refs'][chunk]
-        if made_generators:
-            out['gen'] = generators
+            chunks = chunkdict[var]
+
+            ## Need to determine nature of chunking so far within the variables - get the shape of global chunks
+            dims, ndims = checkdims(chunks)
+
+            # Chunk along memory axis seamlessly
+            if True: # Extra conditional
+
+                # Set up variables
+                index = 'i_' + var
+                dimsize = 1
+
+                # Set up the key chunk indicator
+                key = str(var) + '/'
+                for x, dim in enumerate(dims):
+                    if x != 0:
+                        key += '.'
+                    if dim < 2:
+                        key += '0'
+                    else:
+                        key += '{{' + index + '}}'
+                        dimsize = dimsize*dim
+
+                # Compile chunks, offsets
+
+                fnames = []
+                for chunk in chunks:
+                    meta = out['refs'][chunk]
+                    offset = str(meta[1])
+                    fnames.append(meta[0])
+                url = get_url(fnames, index)
+
+                length = str(var_clengths[var])
+                dimensions = {index: {"stop": dimsize}}
+                                
+                generators.append({
+                    "key":key,
+                    "url":url,
+                    "offset":str(offset),
+                    "length":str(length),
+                    "dimensions":dimensions,
+                    "skipchunks": skipchunks,
+                    "mswitch":True
+                })
+            print('[INFO] removing old references')
+            for chunk in chunkdict[var]:
+                del out['refs'][chunk]
+        out['gen'] = generators
         
         return out
     
-    def install_generators_unused(self, out):
-        ## My routine for compiling generators in the output
-
-        ## Stage 1 - Collect and Associate all variable chunks
-        chunkdict = {}
-        for key in out['refs'].keys():
-            try:
-                x = int(key.split('/')[1].split('.')[0])
-                if 'base64' not in out['refs'][key]:
-                    try:
-                        chunkdict[key.split('/')[0]].append(key)
-                    except KeyError:
-                        chunkdict[key.split('/')[0]] = [key]
-            except:
-                pass
-
-        ## Stage 2 - Concatenate sub chunks if any exist while collecting offsets and lengths
-
-        for var in chunkdict.keys():
-            offset_size = []
-            chunk_sets = {}
-            urls = {}
-
-
-            filedict = {}
-            # Collect offsets and lengths for matching chunk files
-            for chunk in chunkdict[var]:
-                cset = out['refs'][chunk] # get chunk metadata
-                fname = cset[0]
-
-            ## Determine number of unique combinations of offsets and sizes
-            for chunk in chunkdict[var]:
-                cset = out['refs'][chunk] # get chunk metadata
-                notadded = True
-
-                # Compare with known combinations and add new ones or record for each chunk the matching combination
-                for ord, osset in enumerate(offset_size):
-                    if (cset[1], cset[2]) == osset and notadded:
-                        chunk_sets[chunk] = ord
-                        urls[chunk] = out['refs'][chunk][0]
-                        notadded = False
-                if notadded:
-                    chunk_sets[chunk] = len(offset_size)
-                    offset_size.append((cset[1], cset[2]))
-
-                # Now we have a set of unique combinations and a dict of chunks and 'pointers' to the combinations that will become the generators
-
-            # Ideally create a single generator block for all files of the same size and type. 
-            # Future addition: Dynamic filename generation using template language
-            # For now, each file must be given a separate generator.
-            for combo in offset_size:
-                
-                gen = create_generator(combo)
-                        
-
-        ## 1. Identify chunks by timestep.
-        ## 2. Determine numbers of unique chunk sizes and offsets
-        ##    If all unique, set up a generator for each timestep
-        ##    If some are equal, generators can be shared between files.
-        return out
-
     def remove_dimensions(self,out):
         """
         Remove self-reference-only dimensions for ease of use
@@ -284,7 +438,6 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         dims_vars = list(set(key.split('/')[0] \
                              for key in out['refs'].keys() \
                              if '.' not in key.split('/')[0] ))
-        print(dims_vars)
         for dv in dims_vars:
             use_count = 0
             for ref in dims_vars:
@@ -297,7 +450,6 @@ class MZarrToZarrCustom(MultiZarrToZarr):
                         use_count += 2
                 except KeyError:
                     pass # Nonexistent dimension
-            print(dv, use_count)
             if use_count < 2: # i.e only a self referencing dimension, it can be removed
                 remove.append(dv)
         new_refs = {}
@@ -306,3 +458,63 @@ class MZarrToZarrCustom(MultiZarrToZarr):
                 new_refs[var] = out['refs'][var]
         out['refs'] = new_refs
         return out
+
+class CRefFileSystem(ReferenceFileSystem):
+    def __init__(
+        self,
+        fo,
+        **kwargs):
+        super().__init__(
+            fo,
+            **kwargs)
+
+    def _process_gen(self, gens):
+
+        out = {}
+        for gen in gens:
+            dimension = {
+                k: v
+                if isinstance(v, list)
+                else range(v.get("start", 0), v["stop"], v.get("step", 1))
+                for k, v in gen["dimensions"].items()
+            }
+            skipchunks = [
+                c for c in gen["skipchunks"]
+            ]
+
+            mswitch = ("mswitch" in gen)
+
+            products = (
+                dict(zip(dimension.keys(), values))
+                for values in itertools.product(*dimension.values())
+            )
+            for pr in products:
+
+                key = jinja2.Template(gen["key"]).render(**pr, **self.templates)
+                # Custom Month switch
+                if mswitch:
+                    url = custom_url(gen["url"], pr)
+                else:
+                    url = jinja2.Template(gen["url"]).render(**pr, **self.templates)
+
+                # Custom skipchunks switch
+                if key not in skipchunks:
+                    if ("offset" in gen) and ("length" in gen):
+                        offset = int(
+                            jinja2.Template(gen["offset"]).render(**pr, **self.templates)
+                        )
+                        length = int(
+                            jinja2.Template(gen["length"]).render(**pr, **self.templates)
+                        )
+                        out[key] = [url, offset, length]
+                    elif ("offset" in gen) ^ ("length" in gen):
+                        raise ValueError(
+                            "Both 'offset' and 'length' are required for a "
+                            "reference generator entry if either is provided."
+                        )
+                    else:
+                        out[key] = [url]
+if __name__ == '__main__':
+    print(get_url([
+        '/neodc/esacci/land_surface_temperature/data/AQUA_MODIS/L3C/0.01/v3.00/daily/2002/07/04/ESACCI-LST-L3C-LST-MODISA-0.01deg_1DAILY_NIGHT-20020704000000-fv3.00.nc',
+        '/neodc/esacci/land_surface_temperature/data/AQUA_MODIS/L3C/0.01/v3.00/daily/2002/07/05/ESACCI-LST-L3C-LST-MODISA-0.01deg_1DAILY_NIGHT-20020705000000-fv3.00.nc'],'i_pp'))
