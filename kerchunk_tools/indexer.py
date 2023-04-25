@@ -50,7 +50,7 @@ class Indexer:
             # generate kerchunk and write to buffer
             return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
-    def _build_multizarr(self, singles, identical_dims=None):
+    def _build_multizarr(self, singles, reference=None, identical_dims=None):
         from custom import MZarrToZarrCustom
         kwargs = {"coo_map": {"time": "cf:time"},
                   "identical_dims": identical_dims}
@@ -58,12 +58,9 @@ class Indexer:
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
             kwargs["remote_options"] = self.fssopts
-        f = open('testsingle.json','w')
-        f.write(json.dumps(singles[0]))
-        f.close()
       
         mzz = MZarrToZarrCustom(singles, concat_dims=["time"], **kwargs) 
-        return mzz.translate(use_generators=self.use_generators, remove_dims=self.remove_dims) 
+        return mzz.translate(use_generators=self.use_generators, remove_dims=self.remove_dims, reference=reference) 
 
     def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, max_bytes=-1):
         self.update_max_bytes(max_bytes)
@@ -77,13 +74,14 @@ class Indexer:
             reader = self._kc_read_single_s3
         else:
             reader = self._kc_read_single_posix
-
         # Loop through files either using in-memory or file-cache approach
+        reference = file_uris[0]
         if not self.cache_dir:
             # Keep all single Kerchunk indexes in memory
             for file_uri in file_uris:
                 print(f"[INFO] Processing: {file_uri}")
-                single_indexes.append(reader(file_uri))
+                index = reader(file_uri)
+                single_indexes.append(index)
         else:
             # Use cache class to cache each Kerchunk file locally (optimised approach)
             maker = SingleKerchunkMakerWithCacheDir(prefix, file_uris, reader, self.cache_dir)
@@ -94,7 +92,7 @@ class Indexer:
         if len(file_uris) == 1:
             json_content = single_indexes[0]
         else:
-            json_content = self._build_multizarr(single_indexes, identical_dims=identical_dims)
+            json_content = self._build_multizarr(single_indexes, reference=reference, identical_dims=identical_dims)
 
         # Define output file uri and mode
         output_uri = self._get_output_uri(prefix, output_path)
