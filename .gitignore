@@ -109,6 +109,8 @@ ENV/
 setup-env.sh
 
 # Tests data
+kerchunk_tools/filelists/
+kerchunk_tools/kc-indexes/
 tests/kct-test*
 tests/kc-indexes
 *.json
