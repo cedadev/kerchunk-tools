@@ -6,6 +6,8 @@ from fsspec.implementations.reference import ReferenceFileSystem
 import base64
 import json
 import jinja2
+import numpy as np
+from scipy import stats
 
 gen_template = {
     "gen":[],
@@ -246,41 +248,56 @@ class MZarrToZarrCustom(MultiZarrToZarr):
             with fsspec.open(filename, mode="wt", **(storage_options or {})) as f:
                 ujson.dump(out, f)
 
-    def access_reference(self):
+    def access_reference(self, time_dim=1):
         """
         Collect variables from netcdf reference file
         Determine chunking dimensions (if chunking() == 2, assume lat/lon)
         """
         from netCDF4 import Dataset
 
+        ignore = ['lat','lon','latitude','longitude','time']
         reference = Dataset(self.reference)
         maxdims = 0
-        checkvars = []
+        checkvars = {}
         for var in reference.variables.keys():
-            dims = reference.variables[var].chunking()
-            if dims != 'contiguous':
-                ndims = 0
-                for dim in dims:
-                    if int(dim) > 1:
-                        ndims += 1
-                if ndims > maxdims:
-                    maxdims = ndims
-                    checkvars = []
-                if ndims == maxdims:
-                    checkvars.append(var)
+            if var not in ignore:
+                dims = reference.variables[var].chunking()
+                if dims != 'contiguous':
+                    ndims = 0
+                    for dim in dims:
+                        if int(dim) > 1:
+                            ndims += 1
+                    key = ndims
+                    if maxdims < ndims:
+                        maxdims = ndims
+                else:
+                    key = dims
+                if key in checkvars:
+                    checkvars[key].append(var)
+                else:
+                    checkvars[key] = [var]
+        if maxdims == 0:
+            variables = checkvars['contiguous']
+        else:
+            variables = False
+            while maxdims > 1 or variables:
+                if maxdims in checkvars:
+                    variables = checkvars[maxdims]
+                    keepdims = maxdims
+                maxdims -= 1
+        dims = reference.variables[variables[0]].dimensions
 
-        # Find the number of chunks in lat and lon dimensions
-        chunkdimsizes = []
-        for dim in reference.variables[checkvars[0]].chunking():
-            if dim > 1:
-                chunkdimsizes.append(dim)
-
-        ndims = [
-            int(reference.dimensions['lat'].size/chunkdimsizes[0]),
-            int(reference.dimensions['lon'].size/chunkdimsizes[1]),
-        ]
-
-        return checkvars, ndims
+        ndims = []
+        chunks = reference.variables[variables[0]].chunking()
+        for i, dim in enumerate(dims):
+            if i == 0:
+                ndims.append(time_dim)
+            else:
+                if chunks != 'contiguous':
+                    ndims.append(int( int(reference.dimensions[dim].size) / int(chunks[i]) ))
+                else:
+                    ndims.append(1)
+        return variables, ndims
 
     def prepare_chunkarr(self, dims):
         chunkarr = []
@@ -291,7 +308,7 @@ class MZarrToZarrCustom(MultiZarrToZarr):
             chunkarr.append(row)
         return chunkarr
 
-    def install_generators(self, out):
+    def install_generators_old(self, out):
         import numpy as np
         from scipy import stats
         """
@@ -313,7 +330,7 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         var_clengths = {}
         nonuniforms = {}
 
-        # Simple quick check for median chunk sizes
+        # Simple quick check for modal chunk sizes
         for var in checkvars:
             # sample all chunks from first file
             lengths = []
@@ -427,6 +444,133 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         
         return out
     
+    def install_generators(self, out):
+        def update(countdim, dims, index):
+            countdim[index] += 1
+            if countdim[index] >= dims[index]:
+                countdim[index] = 0
+                countdim = update(countdim, dims, index-1)
+            return countdim
+
+        refs = out['refs']
+        time_dim = json.loads(refs['time/.zarray'])['chunks'][0]
+        variables, dims = self.access_reference(time_dim=time_dim)
+        countdim = [0 for dim in dims]
+        countdim[-1] = -1
+        maxdims = [dim-1 for dim in dims]
+        chunkindex = 0
+        files, skipchunks = [], {}
+        filepointer = 0
+        ## Stage 1 pass ##
+        # - collect skipchunks
+        # - collect files
+        # - collect offsets and lengths for determining lengths
+
+        lengths, offsets = [],[]
+        while countdim != maxdims:
+            countdim = update(countdim, dims, -1)
+            # Iterate over dimensions and variables, checking each reference in turn
+            for vindex, var in enumerate(variables):
+                key = var + '/' + '.'.join(str(cd) for cd in countdim)
+                # Compile Skipchunks
+                if key not in refs:
+                    try:
+                        skipchunks['.'.join(str(cd) for cd in countdim)][vindex] = 1
+                    except:
+                        skipchunks['.'.join(str(cd) for cd in countdim)] = [0 for v in variables]
+                        skipchunks['.'.join(str(cd) for cd in countdim)][vindex] = 1
+                    try:
+                        offsets.append(offsets[-1] + lengths[-1])
+                    except:
+                        offsets.append(0)
+                    lengths.append(0)
+                    print(key)
+                else:
+                    lengths.append(refs[key][2])
+                    offsets.append(refs[key][1])
+                    filename = refs[key][0]
+                    if len(files) == 0:
+                        files.append([-1, filename])
+                    if filename != files[filepointer][1]:
+                        files[filepointer][0] = chunkindex-1
+                        filepointer += 1
+                        files.append([chunkindex, filename])
+                    del out['refs'][key]
+                chunkindex += 1
+        files[-1][0] = chunkindex
+        
+        lengths = np.array(lengths, dtype=int)
+        offsets = np.array(offsets, dtype=int)
+
+        nzlengths = lengths[lengths!=0]
+
+        slengths = [
+            int(stats.mode(
+                nzlengths[v::len(variables)]
+            )[0]) 
+            for v in range(len(variables)) ] # Calculate standard chunk sizes
+
+        # Currently have files, variables, varwise, skipchunks, dims, start, lengths, dimensions
+        # Still need to construct unique, gaps
+
+        lv = len(variables)
+        uniquelengths, uniqueids = np.array([]), np.array([])
+        positions = np.arange(0, len(lengths), 1, dtype=int)
+        additions = np.roll((offsets + lengths), 1)
+        additions[0] = offsets[0] # Reset initial position
+
+        gaplengths = (offsets - additions)[(offsets - additions) != 0]
+        gapids     = positions[(offsets - additions) != 0]
+
+        #print(list(lengths[1:1200:lv][lengths[1:1200:lv] != slengths[1]]))
+        #print(list(positions[1:1200:lv][lengths[1:1200:lv] != slengths[1]]))
+
+        for v in range(lv):
+            q = lengths[v::lv][lengths[v::lv] != slengths[v]]
+            p = positions[v::lv][lengths[v::lv] != slengths[v]]
+            p = p[q!=0]
+            q = q[q!=0]
+            uniquelengths = np.concatenate((
+                uniquelengths,
+                q
+            ))
+            uniqueids = np.concatenate((
+                uniqueids,
+                p
+            ))
+            gapmask    = np.abs(gaplengths) != slengths[v]
+            gaplengths = gaplengths[gapmask]
+            gapids     = gapids[gapmask]
+
+        sortind = np.argsort(uniqueids)
+        uniqueids = uniqueids[sortind]
+        uniquelengths = uniquelengths[sortind]
+
+        out['gen'] = {
+            "files": files,
+            "variables" : list(variables),
+            "varwise" : True,
+            "skipchunks" : skipchunks,
+            "dims" : dims,
+            "unique": {
+                "ids": [str(id) for id in uniqueids],
+                "lengths": [str(length) for length in uniquelengths],
+            },
+            "gaps": {
+                "ids": [str(id) for id in gapids],
+                "lengths": [str(length) for length in gaplengths],
+            },
+            "start": str(offsets[0]),
+            "lengths": list(slengths),
+            "dimensions" : {
+                "i":{
+                    "stop": str(chunkindex)
+                }
+            },
+            "gfactor": str( 1 - (len(skipchunks) + len(uniqueids) + len(gapids))/chunkindex)[:4],
+        }
+        return out
+
     def remove_dimensions(self,out):
         """
         Remove self-reference-only dimensions for ease of use
@@ -472,6 +616,9 @@ class CRefFileSystem(ReferenceFileSystem):
 
         out = {}
         for gen in gens:
+            out['refs'].update(self._process_single_gen(gen))
+        """
+        for gen in gens:
             dimension = {
                 k: v
                 if isinstance(v, list)
@@ -514,6 +661,60 @@ class CRefFileSystem(ReferenceFileSystem):
                         )
                     else:
                         out[key] = [url]
+        """
+        return out
+
+    def _process_single_gen(self, gen):
+        refs = {}
+        #if 'varwise' in gen:
+            #varwise = gen['varwise']
+        #else:
+            #return None
+        varwise = True
+        if varwise:
+            chunkcount = 0
+        gapcounter, uniquecounter, fsetcounter = 0, 0, 0
+        offset = int(gen['start'])
+
+        gapid, gaplength = int(gen['gaps']['ids'][gapcounter]), int(gen['gaps']['lengths'][gapcounter])
+        unid, unlength = int(float(gen['unique']['ids'][uniquecounter])), int(float(gen['unique']['lengths'][uniquecounter]))
+
+        while chunkcount < int(gen['dimensions']['i']['stop']):
+            for vindex, var in enumerate(gen['variables']):
+                # Assemble Key
+                key = assemble_key_varwise(chunkcount, gen['dims'], len(gen['variables']))
+                skip = False
+                if key in gen['skipchunks']:
+                    if gen['skipchunks'][key][vindex]:
+                        # Skip this chunk
+                        skip = True
+                if not skip:
+                    # Check gap ids
+                    if chunkcount == gapid:
+                        # This chunk is preceded by a gap
+                        offset += gaplength
+                        gapcounter += 1
+                        if gapcounter < len(gen['gaps']['ids']):
+                            gapid, gaplength = int(gen['gaps']['ids'][gapcounter]), int(gen['gaps']['lengths'][gapcounter])
+                    if chunkcount == unid:
+                        # This chunk has a unique length
+                        length = unlength
+                        uniquecounter += 1
+                        if uniquecounter < len(gen['unique']['ids']):
+                            unid, unlength = int(float(gen['unique']['ids'][uniquecounter])), int(float(gen['unique']['lengths'][uniquecounter]))
+                    else:
+                        length = gen['lengths'][vindex]
+
+                    # Get correct filename - simple way for now
+                    if int(gen['files'][fsetcounter][0]) < chunkcount and fsetcounter < len(gen['files'])-1:
+                        fsetcounter += 1
+                    filename = gen['files'][fsetcounter][1]
+                    refs[var + '/' + key] = [filename, offset, length]
+
+                    offset += length
+                chunkcount += 1
+        return refs
+
 if __name__ == '__main__':
     print(get_url([
         '/neodc/esacci/land_surface_temperature/data/AQUA_MODIS/L3C/0.01/v3.00/daily/2002/07/04/ESACCI-LST-L3C-LST-MODISA-0.01deg_1DAILY_NIGHT-20020704000000-fv3.00.nc',
