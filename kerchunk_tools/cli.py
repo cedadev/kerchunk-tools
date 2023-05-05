@@ -43,8 +43,8 @@ def parse_s3_config_file(fpath):
 @click.option("-i", "--identical-dims", default=None)
 @click.option("-c", "--compression", default=None)
 @click.option("-C", "--cache_dir", default=None)
-@click.option("-g", "--use_generators", default=None)
-@click.option("-r", "--remove_dims", default=None)
+@click.option("-g", "--use_generators", default=None) # Expect 'y'
+@click.option("-r", "--remove_dims", default=None) # Expect 'y'
 @click.option("-v", "--b64vars", default=None)
 def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"], 
            output_path=DEFAULTS["output_path"], max_bytes=DEFAULTS["max_bytes"],
@@ -62,7 +62,9 @@ def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"],
     identical_dims = identical_dims.split(",") if identical_dims else None
 
     indexer = Indexer(s3_config=s3_config, max_bytes=max_bytes, cache_dir=cache_dir,
-                      use_generators=use_generators, remove_dims=remove_dims, b64vars=b64vars)
+                      use_generators=(use_generators=='y'), 
+                      remove_dims=(remove_dims=='y'), 
+                      b64vars=b64vars)
     indexer.create(file_uris, prefix, output_path=output_path, identical_dims=identical_dims,
                    compression=compression, max_bytes=max_bytes)
 
