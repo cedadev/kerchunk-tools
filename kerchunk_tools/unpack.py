@@ -14,6 +14,11 @@ _registry = {}
 registry = types.MappingProxyType(_registry)
 
 def assemble_key_varwise(count, dims, vcount):  
+    """
+    Assemble key variable-wise rather than chunk-wise.
+
+    Convert count index to dimension coordinates for this chunk structure
+    """
     products = []
     for index in range(len(dims)):
         p = 1
@@ -31,6 +36,13 @@ def assemble_key_varwise(count, dims, vcount):
     return '.'.join(key)
 
 class CRefFileSystem(ReferenceFileSystem):
+    """
+    Custom ReferenceFileSystem
+
+    Replaces generator processing to use custom generator unpacking
+    Needs optimisation as it uses a simple python iterator currently.
+    """
+    
     def __init__(
         self,
         fo,
@@ -165,6 +177,7 @@ def get_mapper(
     bounds=None,
     **kwargs,
 ):
+    
     """Create key-value interface for given URL and options
 
     The URL will be of the form "protocol://location" and point to the root

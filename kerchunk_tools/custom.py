@@ -153,6 +153,14 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         return variables, ndims
 
     def install_generators(self, out, variables, dims):
+        """
+        Pack chunk arrays into custom generators.
+
+        Single chunk reference pass followed by analysis of lengths and offsets
+        Use of numpy arrays rather than python lists to improve performance.
+        """
+        
+        
         def update(countdim, dims, index):
             countdim[index] += 1
             if countdim[index] >= dims[index]:
