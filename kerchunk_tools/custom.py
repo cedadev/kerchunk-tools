@@ -86,6 +86,8 @@ class MZarrToZarrCustom(MultiZarrToZarr):
 
         # Set up custom generator code
         print('[INFO] Starting Custom Section')
+
+        # Requires time dimension specified in the chunk file
         time_dim = json.loads(self.out['time/.zarray'])['chunks'][0]
         variables, dims = self.access_reference(reference, time_dim=time_dim)
         if use_generators:
@@ -108,13 +110,19 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         """
         from netCDF4 import Dataset
         print('[INFO] Accessing Reference')
+
+        # These dimensions are always ignored when retrieving variables
         ignore = ['lat','lon','latitude','longitude','time']
         reference = Dataset(freference)
         maxdims = 0
         checkvars = {}
+
+        # Determine which variables are chunked with which structure.
         for var in reference.variables.keys():
             if var not in ignore:
                 dims = reference.variables[var].chunking()
+                
+                # Determine number of chunked dims per variable
                 if dims != 'contiguous':
                     ndims = 0
                     for dim in dims:
@@ -125,14 +133,19 @@ class MZarrToZarrCustom(MultiZarrToZarr):
                         maxdims = ndims
                 else:
                     key = dims
+
+                # Collect variables in dict by number of chunked dims.
                 if key in checkvars:
                     checkvars[key].append(var)
                 else:
                     checkvars[key] = [var]
+
+        # Check for no internal chunking
         if maxdims == 0:
             variables = checkvars['contiguous']
         else:
             variables = False
+            # Find highest number of chunks and collect variables
             while maxdims > 1 and not variables:
                 if maxdims in checkvars:
                     variables = checkvars[maxdims]
@@ -146,6 +159,7 @@ class MZarrToZarrCustom(MultiZarrToZarr):
             if i == 0:
                 ndims.append(time_dim)
             else:
+                # Determine number of chunks from size of total dimension and size of each chunk
                 if chunks != 'contiguous':
                     ndims.append(int( int(reference.dimensions[dim].size) / int(chunks[i]) ))
                 else:
@@ -159,7 +173,6 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         Single chunk reference pass followed by analysis of lengths and offsets
         Use of numpy arrays rather than python lists to improve performance.
         """
-        
         
         def update(countdim, dims, index):
             countdim[index] += 1
@@ -180,6 +193,7 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         # - collect skipchunks
         # - collect files
         # - collect offsets and lengths for determining lengths
+
         print('[INFO] Installing Generator')
         lengths, offsets = [],[]
         while countdim != maxdims:
@@ -200,8 +214,11 @@ class MZarrToZarrCustom(MultiZarrToZarr):
                         offsets.append(0)
                     lengths.append(0)
                 else:
+                    # Compile offsets and lengths
                     lengths.append(refs[key][2])
                     offsets.append(refs[key][1])
+                    
+                    # Determine files collection
                     filename = refs[key][0]
                     if len(files) == 0:
                         files.append([-1, filename])
@@ -211,13 +228,14 @@ class MZarrToZarrCustom(MultiZarrToZarr):
                         files.append([chunkindex, filename])
                     del out['refs'][key]
                 chunkindex += 1
+        # Set final file chunk index
         files[-1][0] = chunkindex
         
         lengths = np.array(lengths, dtype=int)
         offsets = np.array(offsets, dtype=int)
 
         nzlengths = lengths[lengths!=0]
-
+        # Find standard lengths
         slengths = [
             int(stats.mode(
                 nzlengths[v::len(variables)]
@@ -236,9 +254,6 @@ class MZarrToZarrCustom(MultiZarrToZarr):
         gaplengths = (offsets - additions)[(offsets - additions) != 0]
         gapids     = positions[(offsets - additions) != 0]
 
-        #print(list(lengths[1:1200:lv][lengths[1:1200:lv] != slengths[1]]))
-        #print(list(positions[1:1200:lv][lengths[1:1200:lv] != slengths[1]]))
-
         for v in range(lv):
             q = lengths[v::lv][lengths[v::lv] != slengths[v]]
             p = positions[v::lv][lengths[v::lv] != slengths[v]]
@@ -255,7 +270,8 @@ class MZarrToZarrCustom(MultiZarrToZarr):
             gapmask    = np.abs(gaplengths) != slengths[v]
             gaplengths = gaplengths[gapmask]
             gapids     = gapids[gapmask]
-
+        
+        # Uniques must be in order.
         sortind = np.argsort(uniqueids)
         uniqueids = uniqueids[sortind]
         uniquelengths = uniquelengths[sortind]
