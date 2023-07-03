@@ -62,8 +62,8 @@ def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"],
     identical_dims = identical_dims.split(",") if identical_dims else None
 
     indexer = Indexer(s3_config=s3_config, max_bytes=max_bytes, cache_dir=cache_dir,
-                      use_generators=(use_generators=='y'), 
-                      remove_dims=(remove_dims=='y'), 
+                      use_generators=bool(use_generators), 
+                      remove_dims=bool(remove_dims), 
                       b64vars=b64vars)
     indexer.create(file_uris, prefix, output_path=output_path, identical_dims=identical_dims,
                    compression=compression, max_bytes=max_bytes)
