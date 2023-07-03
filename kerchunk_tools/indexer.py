@@ -38,12 +38,24 @@ class Indexer:
     def update_max_bytes(self, max_bytes):
         self.max_bytes = max_bytes if max_bytes > 0 else self.MAX_INDEXED_ARRAY_SIZE_IN_BYTES
 
+    def safe_create(self, nfile, **kwargs):
+        from custom import SHdf5ToZarrCustom
+        from kerchunk.netCDF3 import NetCDF3ToZarr
+        try:
+            return SHdf5ToZarrCustom(nfile, **kwargs).translate()
+        except OSError:
+            try:
+                return NetCDF3ToZarr(nfile, **kwargs).translate()
+            except:
+                return False
+            return False
+
     def _get_output_uri(self, prefix, output_path):
         return f"{self.uri_prefix}{prefix}/{output_path}"
 
     def _kc_read_single_posix(self, file_uri):
         from custom import SHdf5ToZarrCustom
-        return SHdf5ToZarrCustom(file_uri, inline_threshold=self.max_bytes, b64vars=self.b64vars).translate()
+        return self.safe_create(file_uri, inline_threshold=self.max_bytes, b64vars=self.b64vars)
 
     def _kc_read_single_s3(self, file_uri):
         with fsspec.open(file_uri, "rb", **self.fssopts) as input_fss:
