@@ -55,4 +55,5 @@ def main():
     ktotal = k_avg * len(flist)
     print(f'Old: {k1*len(flist)/1:.3f} KB - New: {ktotal/1:.3f} KB')
 
-main()
+#main()
+count_refs('/neodc/esacci/cloud/data/version3/L3C/AVHRR-PM/v3.0/AVHRR_NOAA_14/2001/200104-ESACCI-L3C_CLOUD-CLD_PRODUCTS-AVHRR_NOAA-14-fv3.0.nc')
