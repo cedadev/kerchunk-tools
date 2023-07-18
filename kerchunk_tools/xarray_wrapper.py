@@ -8,7 +8,7 @@ _xr_open_args = {"consolidated": False}
 
 def wrap_xr_open(file_uri, scheme="posix", s3_config=None, compression="infer"):
     if compression == "infer":
-        compression = "zstd" if file_uri.split(".")[-1].lower() == "zstd" else None
+        compression = "zstd" if file_uri.split(".")[-1].lower() in ("zstd", "zst") else None
 
     if scheme == "s3" or s3_config:
         return _open_as_s3(file_uri, s3_config, compression=compression)

@@ -14,7 +14,7 @@ class Indexer:
 
     MAX_INDEXED_ARRAY_SIZE_IN_BYTES = 10000
 
-    def __init__(self, s3_config=None, max_bytes=-1, cache_dir=None):
+    def __init__(self, s3_config=None, scheme=None, max_bytes=-1, cache_dir=None):
         if s3_config:
             self.scheme = "s3"
             self.uri_prefix = "s3://"
@@ -25,7 +25,7 @@ class Indexer:
             }
 
         else:
-            self.scheme = "posix"
+            self.scheme = scheme if scheme else "posix"
             self.uri_prefix = ""
             self.fssopts = {}
 
@@ -40,6 +40,9 @@ class Indexer:
 
     def _kc_read_single_posix(self, file_uri):
         return kerchunk.hdf.SingleHdf5ToZarr(file_uri, inline_threshold=self.max_bytes).translate()
+
+    def _kc_read_single_http(self, file_uri):
+        return kerchunk.hdf.SingleHdf5ToZarr(fsspec.open(file_uri), inline_threshold=self.max_bytes).translate()
 
     def _kc_read_single_s3(self, file_uri):
         with fsspec.open(file_uri, "rb", **self.fssopts) as input_fss:
@@ -67,6 +70,8 @@ class Indexer:
         # Set the reader for accessing files (for S3 or POSIX)
         if self.scheme == "s3":
             reader = self._kc_read_single_s3
+        elif self.scheme in ("http", "https"):
+            reader = self._kc_read_single_http
         else:
             reader = self._kc_read_single_posix
 
