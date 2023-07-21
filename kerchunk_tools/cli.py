@@ -39,13 +39,14 @@ def parse_s3_config_file(fpath):
 @click.option("-p", "--prefix", default=DEFAULTS["prefix"])
 @click.option("-o", "--output-path", default=DEFAULTS["output_path"])
 @click.option("-b", "--max-bytes", default=DEFAULTS["max_bytes"])
+@click.option("-e", "--engine", default=None)
 @click.option("-s", "--s3-config-file", default=None)
 @click.option("-S", "--scheme", default=None)
 @click.option("-i", "--identical-dims", default=None)
 @click.option("-c", "--compression", default=None)
 @click.option("-C", "--cache_dir", default=None)
 def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"], 
-           output_path=DEFAULTS["output_path"], max_bytes=DEFAULTS["max_bytes"],
+           output_path=DEFAULTS["output_path"], max_bytes=DEFAULTS["max_bytes"], engine=None,
            s3_config_file=None, scheme=None, identical_dims=None, compression=None, cache_dir=None):
     """
     Create a Kerchunk index file and save to POSIX/object-store. If multiple
@@ -60,7 +61,7 @@ def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"],
 
     indexer = Indexer(s3_config=s3_config, scheme=scheme, max_bytes=max_bytes, cache_dir=cache_dir)
     indexer.create(file_uris, prefix, output_path=output_path, identical_dims=identical_dims,
-                   compression=compression, max_bytes=max_bytes)
+                   compression=compression, engine=engine, max_bytes=max_bytes)
 
 
 @main.command()

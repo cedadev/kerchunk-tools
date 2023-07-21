@@ -2,12 +2,19 @@ import os
 import json
 import ujson
 import fsspec
-import kerchunk.hdf
+import kerchunk.hdf, kerchunk.netCDF3
 from kerchunk.combine import MultiZarrToZarr
 
 from urllib.parse import urlparse
 
-from .utils import prepare_dir           #had a . before the word before import
+from .utils import prepare_dir
+
+
+converters = {
+    None: kerchunk.hdf.SingleHdf5ToZarr,
+    "hdf5": kerchunk.hdf.SingleHdf5ToZarr,
+    "netcdf3": kerchunk.netCDF3.NetCDF3ToZarr
+}
 
 
 class Indexer:
@@ -29,6 +36,7 @@ class Indexer:
             self.uri_prefix = ""
             self.fssopts = {}
 
+        self.converter = converters.get(None)
         self.cache_dir = cache_dir
         self.update_max_bytes(max_bytes)
 
@@ -39,15 +47,12 @@ class Indexer:
         return f"{self.uri_prefix}{prefix}/{output_path}"
 
     def _kc_read_single_posix(self, file_uri):
-        return kerchunk.hdf.SingleHdf5ToZarr(file_uri, inline_threshold=self.max_bytes).translate()
-
-    def _kc_read_single_http(self, file_uri):
-        return kerchunk.hdf.SingleHdf5ToZarr(fsspec.open(file_uri), inline_threshold=self.max_bytes).translate()
+        return self.converter(file_uri, inline_threshold=self.max_bytes).translate()
 
     def _kc_read_single_s3(self, file_uri):
         with fsspec.open(file_uri, "rb", **self.fssopts) as input_fss:
             # generate kerchunk and write to buffer
-            return kerchunk.hdf.SingleHdf5ToZarr(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
+            return self.converter(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
     def _build_multizarr(self, singles, identical_dims=None):
         kwargs = {"coo_map": {"time": "cf:time"},
@@ -60,8 +65,10 @@ class Indexer:
         mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
         return mzz.translate() 
 
-    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, max_bytes=-1):
+    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, 
+               engine=None, max_bytes=-1):
         self.update_max_bytes(max_bytes)
+        self.converter = converters.get(engine)
         file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
 
         # Loop through data files collecting their metadata
@@ -70,8 +77,6 @@ class Indexer:
         # Set the reader for accessing files (for S3 or POSIX)
         if self.scheme == "s3":
             reader = self._kc_read_single_s3
-        elif self.scheme in ("http", "https"):
-            reader = self._kc_read_single_http
         else:
             reader = self._kc_read_single_posix
 
