@@ -86,6 +86,7 @@ dependencies:
   - lz4=4.0.2=py39h029007f_0
   - lz4-c=1.9.3=h9c3ff4c_1
   - markupsafe=2.1.1=py39hb9d737c_2
+  - matplotlib==3.5.2
   - minio=7.1.12=pyhd8ed1ab_0
   - msgpack-python=1.0.4=py39hf939315_1
   - multidict=6.0.2=py39hb9d737c_2
