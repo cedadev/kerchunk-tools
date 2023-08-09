@@ -16,6 +16,10 @@ The tools included here allow:
  - a wrapper around `xarray` to ensure that the data can be read by Python
  - integration with access control to limit read/write operations as desired
 
+An example notebook can be run using binder:
+
+https://mybinder.org/v2/gh/cedadev/kerchunk-tools.git/main?filepath=notebooks
+
 ## Installation
 
 ### Method 1: Install with miniconda
