@@ -7,7 +7,7 @@ from kerchunk.combine import MultiZarrToZarr
 
 from urllib.parse import urlparse
 
-from .utils import prepare_dir
+from utils import prepare_dir
 
 
 converters = {
@@ -54,19 +54,30 @@ class Indexer:
             # generate kerchunk and write to buffer
             return self.converter(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
-    def _build_multizarr(self, singles, identical_dims=None):
+    def _build_multizarr(self, singles, identical_dims=None, add_time=None):
         kwargs = {"coo_map": {"time": "cf:time"},
                   "identical_dims": identical_dims}
 
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
             kwargs["remote_options"] = self.fssopts
-      
-        mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
+
+        def add_time_dim(singles):
+            import base64
+            import numpy as np
+            for x, s in enumerate(singles):
+                s['refs']['time/.zarray'] = '{\n    "chunks": [\n        '+str(len(singles))+'\n    ],\n    "compressor": null,\n    "dtype": "<i8",\n    "fill_value": 4611686018427387904,\n    "filters": null,\n    "order": "C",\n    "shape": [\n        '+str(len(singles))+'\n    ],\n    "zarr_format": 2\n}'
+                s['refs']['time/.zattrs'] = '{\n    \"_ARRAY_DIMENSIONS\": [\n        \"time\"\n    ],\n    \"axis\": \"T\",\n    \"calendar\": \"standard\",\n    \"long_name\": \"time\",\n    \"standard_name\": \"time\",\n    \"units\": \"hours since 1950-01-01 00:00:00\"\n}'
+                s['refs']['time/0'] = b"base64:" + base64.b64encode(np.array([x for i in range(len(singles))]).tobytes())
+            print('[INFO] Added Time Dimension')
+            return singles
+        if add_time:
+            singles = add_time_dim(singles)
+        mzz = MultiZarrToZarr(singles, **kwargs) 
         return mzz.translate() 
 
     def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, 
-               engine=None, max_bytes=-1):
+               engine=None, max_bytes=-1, add_time=None):
         self.update_max_bytes(max_bytes)
         self.converter = converters.get(engine)
         file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
@@ -96,7 +107,7 @@ class Indexer:
         if len(file_uris) == 1:
             json_content = single_indexes[0]
         else:
-            json_content = self._build_multizarr(single_indexes, identical_dims=identical_dims)
+            json_content = self._build_multizarr(single_indexes, identical_dims=identical_dims, add_time=add_time)
 
         # Define output file uri and mode
         output_uri = self._get_output_uri(prefix, output_path)

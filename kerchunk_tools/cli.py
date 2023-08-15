@@ -6,9 +6,9 @@ __copyright__ = "Copyright 2022 United Kingdom Research and Innovation"
 __license__ = "BSD - see LICENSE file in top-level package directory"
 
 
-from .indexer import Indexer
-from .xarray_wrapper import wrap_xr_open
-from .utils import map_archive_path
+from indexer import Indexer
+from xarray_wrapper import wrap_xr_open
+from utils import map_archive_path
 
 import sys
 import json
@@ -45,9 +45,10 @@ def parse_s3_config_file(fpath):
 @click.option("-i", "--identical-dims", default=None)
 @click.option("-c", "--compression", default=None)
 @click.option("-C", "--cache_dir", default=None)
+@click.option('-t', "--add_time", default=None)
 def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"], 
            output_path=DEFAULTS["output_path"], max_bytes=DEFAULTS["max_bytes"], engine=None,
-           s3_config_file=None, scheme=None, identical_dims=None, compression=None, cache_dir=None):
+           s3_config_file=None, scheme=None, identical_dims=None, compression=None, cache_dir=None, add_time=None):
     """
     Create a Kerchunk index file and save to POSIX/object-store. If multiple
     file_uris provided then aggregate them.
@@ -61,7 +62,7 @@ def create(file_uris, file_uris_file=None, prefix=DEFAULTS["prefix"],
 
     indexer = Indexer(s3_config=s3_config, scheme=scheme, max_bytes=max_bytes, cache_dir=cache_dir)
     indexer.create(file_uris, prefix, output_path=output_path, identical_dims=identical_dims,
-                   compression=compression, engine=engine, max_bytes=max_bytes)
+                   compression=compression, engine=engine, max_bytes=max_bytes, add_time=add_time)
 
 
 @main.command()
