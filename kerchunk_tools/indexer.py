@@ -7,7 +7,7 @@ from kerchunk.combine import MultiZarrToZarr
 
 from urllib.parse import urlparse
 
-from utils import prepare_dir
+from utils import prepare_dir, find_time
 
 
 converters = {
@@ -65,10 +65,17 @@ class Indexer:
         def add_time_dim(singles):
             import base64
             import numpy as np
+            try:
+                with open(add_time) as f:
+                    times = [find_time(i) for i in f.readlines()]
+            except:
+                print('[ERR] Error opening time config file - check configuration is in years')
+            # Assume Yearly time set for now
             for x, s in enumerate(singles):
+                time = (times[x]-times[0]).days
                 s['refs']['time/.zarray'] = '{\n    "chunks": [\n        '+str(len(singles))+'\n    ],\n    "compressor": null,\n    "dtype": "<i8",\n    "fill_value": 4611686018427387904,\n    "filters": null,\n    "order": "C",\n    "shape": [\n        '+str(len(singles))+'\n    ],\n    "zarr_format": 2\n}'
-                s['refs']['time/.zattrs'] = '{\n    \"_ARRAY_DIMENSIONS\": [\n        \"time\"\n    ],\n    \"axis\": \"T\",\n    \"calendar\": \"standard\",\n    \"long_name\": \"time\",\n    \"standard_name\": \"time\",\n    \"units\": \"hours since 1950-01-01 00:00:00\"\n}'
-                s['refs']['time/0'] = b"base64:" + base64.b64encode(np.array([x for i in range(len(singles))]).tobytes())
+                s['refs']['time/.zattrs'] = '{\n    \"_ARRAY_DIMENSIONS\": [\n        \"time\"\n    ],\n    \"axis\": \"T\",\n    \"calendar\": \"standard\",\n    \"long_name\": \"time\",\n    \"standard_name\": \"time\",\n    \"units\": \"days since '+str(times[0])+'\"\n}'
+                s['refs']['time/0'] = b"base64:" + base64.b64encode(np.array([time for i in range(len(singles))]).tobytes())
             print('[INFO] Added Time Dimension')
             return singles
         if add_time:
