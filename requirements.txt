@@ -10,5 +10,6 @@ netCDF4
 numpy
 requests
 s3fs
+scipy
 xarray
 zstd

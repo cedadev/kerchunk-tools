@@ -1,0 +1,21 @@
+name: kerchunk-tools
+channels:
+- conda-forge
+- defaults
+dependencies:
+- python=3.9
+- aiohttp
+- cftime
+- click
+- dask
+- fsspec
+- h5py
+- kerchunk
+- minio
+- netCDF4
+- numpy
+- requests
+- scipy
+- s3fs
+- xarray
+- zstd
