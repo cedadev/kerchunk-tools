@@ -1,6 +1,16 @@
 import os
 import sys
+from datetime import datetime
 
+def find_time(time):
+    time = time.replace('\n','')
+    if len(time) == 4:
+        return datetime.strptime(time, "%Y")
+    elif len(time) == 6:
+        return datetime.strptime(time, "%Y%m")
+    else:
+        print('Unsupported time type, use YYYY or YYYYMM where possible')
+        return None
 
 def prepare_dir(dr):
     if not os.path.isdir(dr):

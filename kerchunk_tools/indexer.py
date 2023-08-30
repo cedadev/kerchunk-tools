@@ -4,10 +4,12 @@ import ujson
 import fsspec
 import kerchunk.hdf, kerchunk.netCDF3
 from kerchunk.combine import MultiZarrToZarr
+import base64
+import numpy as np
 
 from urllib.parse import urlparse
 
-from .utils import prepare_dir
+from utils import prepare_dir, find_time
 
 
 converters = {
@@ -69,7 +71,7 @@ class Indexer:
             # generate kerchunk and write to buffer
             return self.converter(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
-    def _build_multizarr(self, singles, identical_dims=None, concat_dims=None):
+    def _build_multizarr(self, singles, identical_dims=None, concat_dims=None, add_time=None):
         kwargs = {"coo_map": {"time": "cf:time"},
                   "identical_dims": identical_dims,
                   "concat_dims": concat_dims or get_default("concat_dims")}
@@ -77,16 +79,36 @@ class Indexer:
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
             kwargs["remote_options"] = self.fssopts
-      
+
+        def add_time_dim(singles):
+            try:
+                with open(add_time) as f:
+                    times = [find_time(i) for i in f.readlines()]
+            except Exception as exc:
+                print('[ERR] Error opening time config file - check configuration is in years')
+
+            # Assume Yearly time set for now
+            for x, s in enumerate(singles):
+                time = (times[x]-times[0]).days
+                s['refs']['time/.zarray'] = '{\n    "chunks": [\n        '+str(len(singles))+'\n    ],\n    "compressor": null,\n    "dtype": "<i8",\n    "fill_value": 4611686018427387904,\n    "filters": null,\n    "order": "C",\n    "shape": [\n        '+str(len(singles))+'\n    ],\n    "zarr_format": 2\n}'
+                s['refs']['time/.zattrs'] = '{\n    \"_ARRAY_DIMENSIONS\": [\n        \"time\"\n    ],\n    \"axis\": \"T\",\n    \"calendar\": \"standard\",\n    \"long_name\": \"time\",\n    \"standard_name\": \"time\",\n    \"units\": \"days since '+str(times[0])+'\"\n}'
+                s['refs']['time/0'] = b"base64:" + base64.b64encode(np.array([time for i in range(len(singles))]).tobytes())
+            print('[INFO] Added Time Dimension')
+            return singles
+
+        if add_time:
+            singles = add_time_dim(singles)
+
         mzz = MultiZarrToZarr(singles, **kwargs) 
         return mzz.translate() 
 
-    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, 
-               concat_dims=None, compression=None, engine=None, max_bytes=-1):
+    def create(self, file_uris, prefix, output_path=None, identical_dims=None, 
+               concat_dims=None, compression=None, engine=None, max_bytes=-1, add_time=None):
 
         self.update_max_bytes(max_bytes)
         self.converter = converters.get(engine)
         file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
+        output_path = output_path or get_default("output_path")
 
         # Loop through data files collecting their metadata
         single_indexes = []
@@ -114,8 +136,7 @@ class Indexer:
             json_content = single_indexes[0]
         else:
             json_content = self._build_multizarr(single_indexes, identical_dims=identical_dims,
-                                                 concat_dims=concat_dims)
-
+                                                 concat_dims=concat_dims, add_time=add_time)
         # Define output file uri and mode
         output_uri = self._get_output_uri(prefix, output_path)
         mode = "wt" if compression == "zstd" else "wb"
