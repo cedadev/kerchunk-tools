@@ -15,5 +15,7 @@ dependencies:
 - netCDF4
 - numpy
 - requests
+- scipy
 - s3fs
 - xarray
+- zstd

@@ -17,6 +17,21 @@ converters = {
 }
 
 
+DEFAULTS = {
+    "concat_dims": ["time"],
+    "max_bytes": 10000,
+    "output_path": "index.json",
+    "prefix": "kc-indexes"
+}
+
+
+def get_default(key):
+    if key not in DEFAULTS:
+        raise KeyError(f"No default value set for: '{key}'")
+
+    return DEFAULTS[key]
+
+
 class Indexer:
 
     MAX_INDEXED_ARRAY_SIZE_IN_BYTES = 10000
@@ -54,19 +69,21 @@ class Indexer:
             # generate kerchunk and write to buffer
             return self.converter(input_fss, file_uri, inline_threshold=self.max_bytes).translate()
 
-    def _build_multizarr(self, singles, identical_dims=None):
+    def _build_multizarr(self, singles, identical_dims=None, concat_dims=None):
         kwargs = {"coo_map": {"time": "cf:time"},
-                  "identical_dims": identical_dims}
+                  "identical_dims": identical_dims,
+                  "concat_dims": concat_dims or get_default("concat_dims")}
 
         if self.scheme == "s3":
             kwargs["remote_protocol"] = "s3"
             kwargs["remote_options"] = self.fssopts
       
-        mzz = MultiZarrToZarr(singles, concat_dims=["time"], **kwargs) 
+        mzz = MultiZarrToZarr(singles, **kwargs) 
         return mzz.translate() 
 
-    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, compression=None, 
-               engine=None, max_bytes=-1):
+    def create(self, file_uris, prefix, output_path="index.json", identical_dims=None, 
+               concat_dims=None, compression=None, engine=None, max_bytes=-1):
+
         self.update_max_bytes(max_bytes)
         self.converter = converters.get(engine)
         file_uris = [file_uris] if isinstance(file_uris, str) else list(file_uris)
@@ -96,7 +113,8 @@ class Indexer:
         if len(file_uris) == 1:
             json_content = single_indexes[0]
         else:
-            json_content = self._build_multizarr(single_indexes, identical_dims=identical_dims)
+            json_content = self._build_multizarr(single_indexes, identical_dims=identical_dims,
+                                                 concat_dims=concat_dims)
 
         # Define output file uri and mode
         output_uri = self._get_output_uri(prefix, output_path)

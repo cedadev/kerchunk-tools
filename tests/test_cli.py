@@ -1,24 +1,4 @@
 import os
-#from subprocess import PIPE, Popen
-
-#kerchunk_tools create -p $prefix -o $kc_file -b $max_bytes $filepaths
-
-#prefix = end file destination
-#kc_file = name of end file
-#max bytes = does nothing?
-#filepaths = file paths to make into file?
-
-
-
-
-#kerchunk_tools create -p outputs/kc-indexes/files -o CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json -b 50000 /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc
-#^^works^^
-
-
-
-#kerchunk_tools create -p outputs/kc-indexes/files -o CMIP6.CMIP.CSIRO.ACCESS-ESM1-5.historical.r1i1p1f1.Oyr.o2.gn.latest.json -b 50000 /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1850-1949.nc /badc/cmip6/data/CMIP6/CMIP/CSIRO/ACCESS-ESM1-5/historical/r1i1p1f1/Oyr/o2/gn/latest/o2_Oyr_ACCESS-ESM1-5_historical_r1i1p1f1_gn_1950-2014.nc
-
-
 
 
 def test_cli_help_option_success():
@@ -133,29 +113,3 @@ def test_map_path_success():
 
 
 
-
-
-#create:
-
-#help						done
-#single path				done
-#multi path					done
-#not enough bytes           ????
-#correct file name			done
-#wrong prefix               done
-#bad input path             done
-#-f works                   done
-
-
-#map:
-
-#do thing
-
-
-
-#prefix = end file destination
-#kc_file = name of end file
-#max bytes = does nothing?
-#filepaths = file paths to make into file
-#(-f) files-uris-file = provide a text file that includes a list of file URIs (with one line per URI)
-#(-c) s3-config-file = points to an S3 configuration file (when you are writing to S3 object store)
