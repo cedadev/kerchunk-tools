@@ -6,19 +6,14 @@ __copyright__ = "Copyright 2022 United Kingdom Research and Innovation"
 __license__ = "BSD - see LICENSE file in top-level package directory"
 
 
-<<<<<<< HEAD
 from .indexer import Indexer, get_default
 from .xarray_wrapper import wrap_xr_open
 from .utils import map_archive_path
-=======
-from indexer import Indexer
-from xarray_wrapper import wrap_xr_open
-from utils import map_archive_path
->>>>>>> main
 
 import sys
 import json
 import click
+
 
 @click.group()
 def main():
